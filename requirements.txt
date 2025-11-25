@@ -1,0 +1,11 @@
+Django>=4.2
+djangorestframework
+djangorestframework-simplejwt
+psycopg2-binary
+Pillow
+django-cors-headers
+gspread
+google-auth
+reportlab
+django-storages[boto3]
+python-dotenv
