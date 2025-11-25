@@ -58,7 +58,8 @@ class MeasurementSerializer(serializers.ModelSerializer):
 class InspectionImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = InspectionImage
-        fields = ["id","type","image","uploaded_at"]
+        # --- FIX IS HERE: Changed 'type' to 'caption' ---
+        fields = ["id","caption","image","uploaded_at"]
 
 class InspectionListSerializer(serializers.ModelSerializer):
     class Meta:

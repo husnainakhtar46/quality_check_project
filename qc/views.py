@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, filters # Added filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -21,17 +21,16 @@ from django.db.models import Prefetch
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
+# ... (generate_pdf_buffer function remains exactly the same as previous version) ...
 def generate_pdf_buffer(inspection):
     buffer = io.BytesIO()
     p = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
 
     # --- Page 1: Data & Measurements ---
-    
     p.setFont("Helvetica-Bold", 18)
     p.drawString(50, height - 50, "QUALITY INSPECTION REPORT")
     
-    # Decision Status
     p.setFont("Helvetica-Bold", 14)
     decision = inspection.decision or "PENDING"
     if decision == "Rejected":
@@ -116,40 +115,22 @@ def generate_pdf_buffer(inspection):
         
         for i, img_obj in enumerate(images[:4]):
             if i >= 4: break
-            
             x, y = positions[i]
             try:
-                # --- COMPRESSION LOGIC START ---
-                # 1. Open the image using Pillow
                 with PILImage.open(img_obj.image.path) as pil_img:
-                    
-                    # 2. Convert to RGB (Fixes issues with PNG transparency)
                     if pil_img.mode in ("RGBA", "P"):
                         pil_img = pil_img.convert("RGB")
-                    
-                    # 3. Resize efficiently
-                    # We resize to ~800px width. This is high enough quality for 
-                    # a small PDF box but drastically smaller in file size than 4000px.
                     pil_img.thumbnail((800, 800))
-                    
-                    # 4. Save compressed version to memory
                     img_buffer = io.BytesIO()
-                    # Quality=60 is the "Sweet Spot" for PDF reports (visually good, tiny file)
                     pil_img.save(img_buffer, format='JPEG', quality=60, optimize=True)
                     img_buffer.seek(0)
-                    
-                    # 5. Pass the memory buffer to ReportLab
                     reportlab_img = ImageReader(img_buffer)
-                    
-                    # Draw the image
                     p.drawImage(reportlab_img, x, y, width=250, height=200, preserveAspectRatio=True)
-                # --- COMPRESSION LOGIC END ---
 
                 p.setFont("Helvetica-Bold", 10)
                 p.setFillColorRGB(0, 0, 0)
                 caption = img_obj.caption or "Image"
                 p.drawString(x, y - 15, caption)
-                
             except Exception as e:
                 print(f"Error drawing image: {e}")
                 p.drawString(x, y, "Error loading image")
@@ -160,7 +141,12 @@ def generate_pdf_buffer(inspection):
 
 class InspectionViewSet(viewsets.ModelViewSet):
     queryset = Inspection.objects.all()
+    serializer_class = InspectionSerializer
     
+    # --- ENABLE SEARCH ---
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['style', 'po_number', 'customer__name'] # Fields you can search by
+
     def get_queryset(self):
         queryset = Inspection.objects.select_related('customer', 'template').order_by("-created_at")
         if self.action != 'list':
@@ -228,7 +214,6 @@ class DashboardView(APIView):
         fail_count = Inspection.objects.filter(decision="Rejected").count()
         pass_rate = (pass_count / total_inspections * 100) if total_inspections > 0 else 0
         
-        # Use the optimized serializer for recent inspections too
         recent_inspections = Inspection.objects.select_related('customer', 'template') \
                                                .order_by("-created_at")[:5]
         recent_serializer = InspectionListSerializer(recent_inspections, many=True)
