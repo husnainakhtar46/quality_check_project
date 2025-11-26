@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { Plus, FileText, Mail, Trash2, Search, Copy, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { FileText, Mail, Trash2, Search, Copy, Loader2, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
 import { Button } from '../components/ui/button';
@@ -31,20 +31,33 @@ import {
     DialogTrigger,
 } from '../components/ui/dialog';
 
+// --- TYPE DEFINITIONS ---
 type ImageSlot = {
     file: File | null;
     caption: string;
+};
+
+// Explicitly define what a Measurement looks like so TypeScript doesn't complain
+type Measurement = {
+    pom_name: string;
+    tol: number | string;
+    std: number | string;
+    s1: number | string;
+    s2: number | string;
+    s3: number | string;
+    s4: number | string;
+    s5: number | string;
+    s6: number | string;
+    status: string;
 };
 
 const Inspections = () => {
     const queryClient = useQueryClient();
     const [isOpen, setIsOpen] = useState(false);
 
-    // Fix: We track if the template change is "manual" by the user vs "auto" by loading
     const [isManualTemplateChange, setIsManualTemplateChange] = useState(false);
     const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
 
-    // --- STATE ---
     const [page, setPage] = useState(1);
     const [listSearch, setListSearch] = useState('');
     const [debouncedListSearch, setDebouncedListSearch] = useState('');
@@ -60,15 +73,21 @@ const Inspections = () => {
 
     const { register, control, handleSubmit, reset, setValue, watch } = useForm({
         defaultValues: {
-            style: '', color: '', po_number: '', stage: 'PPS',
-            customer: '', template: '', remarks: '', decision: '',
-            measurements: [] as any[],
+            style: '', color: '', po_number: '', stage: 'Proto',
+            customer: '', template: '',
+
+            customer_remarks: '',
+            qa_fit_comments: '', qa_workmanship_comments: '', qa_wash_comments: '', qa_fabric_comments: '', qa_accessories_comments: '',
+            remarks: '',
+
+            decision: '',
+            measurements: [] as Measurement[],
         }
     });
 
     const { fields, replace } = useFieldArray({ control, name: "measurements" });
 
-    // --- DEBOUNCE LOGIC ---
+    // Debounce
     useEffect(() => {
         const timer = setTimeout(() => { setDebouncedListSearch(listSearch); setPage(1); }, 500);
         return () => clearTimeout(timer);
@@ -79,7 +98,7 @@ const Inspections = () => {
         return () => clearTimeout(timer);
     }, [modalSearchTerm]);
 
-    // --- API FETCHING ---
+    // Fetching
     const { data: inspectionData, isLoading, isPlaceholderData } = useQuery({
         queryKey: ['inspections', page, debouncedListSearch],
         queryFn: async () => {
@@ -111,63 +130,62 @@ const Inspections = () => {
         enabled: debouncedModalSearchTerm.length > 0,
     });
 
-    // --- LOAD DATA LOGIC (FIXED) ---
+    // Load Data Handler
     const handleLoadInspection = async (id: string) => {
         try {
             toast.info("Loading previous data...");
             const { data } = await api.get(`/inspections/${id}/`);
 
-            // 1. Disable manual template trigger temporarily
             setIsManualTemplateChange(false);
-            setSelectedTemplate(data.template); // Set this so dropdown shows correctly
+            setSelectedTemplate(data.template);
 
-            // 2. Safely map data (Handle Nulls -> Empty Strings)
             reset({
                 style: data.style || '',
                 color: data.color || '',
                 po_number: data.po_number || '',
-                stage: data.stage || 'PPS',
+                stage: data.stage || 'Proto',
                 customer: data.customer || '',
                 template: data.template || '',
+
+                customer_remarks: data.customer_remarks || '',
+                qa_fit_comments: data.qa_fit_comments || '',
+                qa_workmanship_comments: data.qa_workmanship_comments || '',
+                qa_wash_comments: data.qa_wash_comments || '',
+                qa_fabric_comments: data.qa_fabric_comments || '',
+                qa_accessories_comments: data.qa_accessories_comments || '',
                 remarks: data.remarks || '',
-                decision: '', // Force re-decision
+
+                decision: '',
                 measurements: (data.measurements || []).map((m: any) => ({
                     pom_name: m.pom_name,
                     tol: m.tol,
-                    std: m.std,
-                    s1: m.s1 ?? '', // Use nullish coalescing
-                    s2: m.s2 ?? '',
-                    s3: m.s3 ?? '',
+                    std: m.std ?? '',
+                    s1: m.s1 ?? '', s2: m.s2 ?? '', s3: m.s3 ?? '',
+                    s4: m.s4 ?? '', s5: m.s5 ?? '', s6: m.s6 ?? '',
                     status: 'OK'
                 }))
             });
 
-            // 3. Reset Images
-            setImageSlots([
-                { file: null, caption: '' }, { file: null, caption: '' },
-                { file: null, caption: '' }, { file: null, caption: '' }
-            ]);
-
+            setImageSlots([{ file: null, caption: '' }, { file: null, caption: '' }, { file: null, caption: '' }, { file: null, caption: '' }]);
             setShowSearchResults(false);
             setModalSearchTerm('');
             toast.success("Loaded successfully!");
         } catch (e) {
-            console.error("Load Error:", e);
-            toast.error("Failed to load details. Check console.");
+            toast.error("Failed to load details");
         }
     };
 
-    // --- TEMPLATE CHANGE LOGIC (FIXED) ---
+    // Template Change
     useEffect(() => {
-        // Only overwrite measurements if the user MANUALLY changed the template
         if (isManualTemplateChange && selectedTemplate && templates) {
             const template = templates.find((t: any) => t.id === selectedTemplate);
             if (template) {
                 replace(template.poms.map((pom: any) => ({
                     pom_name: pom.name,
                     tol: pom.default_tol,
-                    std: pom.default_std,
-                    s1: '', s2: '', s3: '', status: 'OK'
+                    std: '',
+                    s1: '', s2: '', s3: '', s4: '', s5: '', s6: '',
+                    status: 'OK'
                 })));
             }
         }
@@ -179,9 +197,9 @@ const Inspections = () => {
                 ...data,
                 measurements: data.measurements.map((m: any) => ({
                     ...m,
-                    s1: m.s1 === '' ? null : m.s1,
-                    s2: m.s2 === '' ? null : m.s2,
-                    s3: m.s3 === '' ? null : m.s3,
+                    s1: m.s1 === '' ? null : m.s1, s2: m.s2 === '' ? null : m.s2, s3: m.s3 === '' ? null : m.s3,
+                    s4: m.s4 === '' ? null : m.s4, s5: m.s5 === '' ? null : m.s5, s6: m.s6 === '' ? null : m.s6,
+                    std: m.std === '' ? null : m.std,
                 }))
             };
 
@@ -204,17 +222,14 @@ const Inspections = () => {
             queryClient.invalidateQueries({ queryKey: ['inspections'] });
             setIsOpen(false);
             reset();
-            setImageSlots([
-                { file: null, caption: '' }, { file: null, caption: '' },
-                { file: null, caption: '' }, { file: null, caption: '' }
-            ]);
+            setImageSlots([{ file: null, caption: '' }, { file: null, caption: '' }, { file: null, caption: '' }, { file: null, caption: '' }]);
             setSelectedTemplate(null);
-            setIsManualTemplateChange(false); // Reset flag
-            toast.success('Inspection created successfully');
+            setIsManualTemplateChange(false);
+            toast.success('Evaluation created');
         },
-        onError: (err: any) => {
+        onError: (err) => {
             console.error(err);
-            toast.error('Failed to create inspection');
+            toast.error('Failed to save');
         }
     });
 
@@ -227,28 +242,22 @@ const Inspections = () => {
     });
 
     const emailMutation = useMutation({
-        mutationFn: async ({ id, email }: { id: string; email: string }) => {
-            await api.post(`/inspections/${id}/send_email/`, { recipients: [email] });
+        mutationFn: async (id: string) => {
+            await api.post(`/inspections/${id}/send_email/`, { recipients: [] });
         },
-        onSuccess: () => toast.success('Email sent')
+        onSuccess: () => toast.success('Email sent to customer')
     });
 
+    // Validation Logic
     const measurements = watch('measurements');
-    useEffect(() => {
-        measurements.forEach((m, index) => {
-            if (m.std && (m.s1 || m.s2 || m.s3)) {
-                const vals = [parseFloat(m.s1), parseFloat(m.s2), parseFloat(m.s3)].filter(v => !isNaN(v));
-                if (vals.length > 0) {
-                    const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
-                    const diff = Math.abs(avg - m.std);
-                    const status = diff > (m.tol + 0.0001) ? 'FAIL' : 'OK';
-                    if (m.status !== status) {
-                        setValue(`measurements.${index}.status`, status);
-                    }
-                }
-            }
-        });
-    }, [JSON.stringify(measurements), setValue]);
+    const checkTol = (val: any, std: any, tol: any) => {
+        if (!val || val === '' || !std || std === '') return false;
+        const numVal = parseFloat(val);
+        const numStd = parseFloat(std);
+        const numTol = parseFloat(tol);
+        if (isNaN(numVal) || isNaN(numStd) || isNaN(numTol)) return false;
+        return Math.abs(numVal - numStd) > (numTol + 0.0001);
+    };
 
     const handleImageChange = (index: number, file: File | null) => {
         const newSlots = [...imageSlots];
@@ -272,7 +281,7 @@ const Inspections = () => {
             const url = window.URL.createObjectURL(new Blob([res.data]));
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `${style}.pdf`);
+            link.setAttribute('download', `${style}_Evaluation.pdf`);
             document.body.appendChild(link);
             link.click();
         } catch (e) { toast.error('Download failed'); }
@@ -284,56 +293,40 @@ const Inspections = () => {
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-                <h1 className="text-3xl font-bold text-gray-900">Inspections</h1>
+                <h1 className="text-3xl font-bold text-gray-900">Sample Evaluation</h1>
+
                 <Dialog open={isOpen} onOpenChange={setIsOpen}>
                     <DialogTrigger asChild>
-                        <Button><Plus className="w-4 h-4 mr-2" />New Inspection</Button>
+                        <Button><Plus className="w-4 h-4 mr-2" />New Evaluation</Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-5xl max-h-[95vh] overflow-y-auto">
-                        <DialogHeader><DialogTitle>New Inspection</DialogTitle></DialogHeader>
+                    <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
+                        <DialogHeader><DialogTitle>Sample Evaluation</DialogTitle></DialogHeader>
 
                         <div className="space-y-6 py-4">
-                            {/* --- MODAL SEARCH BAR (COPY PREVIOUS) --- */}
+                            {/* Search Bar */}
                             <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                <Label className="text-blue-700 mb-2 block flex items-center gap-2">
-                                    <Copy className="w-4 h-4" /> Copy data from previous report?
+                                <Label className="text-blue-700 mb-2 flex items-center gap-2">
+                                    <Copy className="w-4 h-4" /> Load previous evaluation data?
                                 </Label>
                                 <div className="relative">
-                                    <div className="relative">
-                                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
-                                        <Input
-                                            placeholder="Type Style, PO or Customer to search..."
-                                            className="pl-8 bg-white"
-                                            value={modalSearchTerm}
-                                            onChange={(e) => {
-                                                setModalSearchTerm(e.target.value);
-                                                setShowSearchResults(true);
-                                            }}
-                                        />
-                                        {isSearchingModal && <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-gray-400" />}
-                                    </div>
+                                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+                                    <Input
+                                        placeholder="Search by Style, PO or Customer..."
+                                        className="pl-8 bg-white"
+                                        value={modalSearchTerm}
+                                        onChange={(e) => { setModalSearchTerm(e.target.value); setShowSearchResults(true); }}
+                                    />
+                                    {isSearchingModal && <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-gray-400" />}
 
                                     {showSearchResults && debouncedModalSearchTerm && (
                                         <div className="absolute z-50 w-full bg-white border rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
-                                            {modalSearchResults?.length === 0 && !isSearchingModal ? (
-                                                <div className="p-3 text-sm text-gray-500 text-center">No results found.</div>
-                                            ) : (
-                                                modalSearchResults?.map((item: any) => (
-                                                    <div
-                                                        key={item.id}
-                                                        className="p-3 hover:bg-blue-50 cursor-pointer border-b last:border-0 text-sm"
-                                                        onClick={() => handleLoadInspection(item.id)}
-                                                    >
-                                                        <span className="font-bold">{item.style}</span>
-                                                        <span className="mx-2 text-gray-400">|</span>
-                                                        <span className="font-medium text-blue-600">PO: {item.po_number}</span>
-                                                        <span className="mx-2 text-gray-400">|</span>
-                                                        <span>{item.stage}</span>
-                                                        <span className="mx-2 text-gray-400">|</span>
-                                                        <span className="text-gray-500">{new Date(item.created_at).toLocaleDateString()}</span>
-                                                    </div>
-                                                ))
-                                            )}
+                                            {modalSearchResults?.map((item: any) => (
+                                                <div key={item.id} className="p-3 hover:bg-blue-50 cursor-pointer border-b last:border-0 text-sm" onClick={() => handleLoadInspection(item.id)}>
+                                                    <span className="font-bold">{item.style}</span>
+                                                    <span className="mx-2 text-gray-400">|</span>
+                                                    <span className="font-medium text-blue-600">PO: {item.po_number}</span>
+                                                </div>
+                                            ))}
                                         </div>
                                     )}
                                 </div>
@@ -341,148 +334,147 @@ const Inspections = () => {
 
                             <form onSubmit={handleSubmit((data) => createMutation.mutate(data))} className="space-y-6">
                                 <div className="grid grid-cols-3 gap-4">
-                                    <div className="space-y-2">
-                                        <Label>Style</Label>
-                                        <Input {...register("style", { required: true })} />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Color</Label>
-                                        <Input {...register("color")} />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>PO Number</Label>
-                                        <Input {...register("po_number")} />
-                                    </div>
+                                    <div className="space-y-2"><Label>Style</Label><Input {...register("style", { required: true })} /></div>
+                                    <div className="space-y-2"><Label>Color</Label><Input {...register("color")} /></div>
+                                    <div className="space-y-2"><Label>PO Number</Label><Input {...register("po_number")} /></div>
                                     <div className="space-y-2">
                                         <Label>Stage</Label>
-                                        <Select onValueChange={(v) => setValue("stage", v)} defaultValue={watch('stage') || "PPS"}>
+                                        <Select onValueChange={(v) => setValue("stage", v)} defaultValue={watch('stage')}>
                                             <SelectTrigger><SelectValue /></SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="Proto">Proto</SelectItem>
-                                                <SelectItem value="PPS">PPS</SelectItem>
-                                                <SelectItem value="Production">Production</SelectItem>
+                                                {['Dev', 'Proto', 'Fit', 'SMS', 'Size Set', 'Production'].map(s => (
+                                                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                                                ))}
                                             </SelectContent>
                                         </Select>
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Customer</Label>
-                                        <Select
-                                            value={watch("customer") || ""}
-                                            onValueChange={(v) => setValue("customer", v)}
-                                        >
+                                        <Select value={watch("customer")} onValueChange={(v) => setValue("customer", v)}>
                                             <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
                                             <SelectContent>
-                                                {customers?.map((c: any) => (
-                                                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                                                ))}
+                                                {customers?.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                                             </SelectContent>
                                         </Select>
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Template</Label>
-                                        <Select
-                                            value={watch("template") || ""}
-                                            onValueChange={(v) => {
-                                                // IMPORTANT: Only here do we enable the overwrite logic
-                                                setIsManualTemplateChange(true);
-                                                setValue("template", v);
-                                                setSelectedTemplate(v);
-                                            }}
-                                        >
+                                        <Select value={watch("template")} onValueChange={(v) => { setIsManualTemplateChange(true); setValue("template", v); setSelectedTemplate(v); }}>
                                             <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
                                             <SelectContent>
-                                                {templates?.map((t: any) => (
-                                                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                                                ))}
+                                                {templates?.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
                                             </SelectContent>
                                         </Select>
                                     </div>
                                 </div>
 
+                                {/* Measurements Grid (6 Samples) */}
                                 <div className="space-y-2">
                                     <Label>Measurements</Label>
-                                    <div className="border rounded-md p-4 bg-white">
-                                        <div className="grid grid-cols-11 gap-2 mb-2 font-medium text-xs text-gray-500 uppercase">
-                                            <div className="col-span-3">POM</div>
+                                    <div className="border rounded-md p-4 bg-white overflow-x-auto">
+                                        <div className="min-w-[800px] grid grid-cols-10 gap-2 mb-2 font-medium text-xs text-gray-500 uppercase text-center">
+                                            <div className="col-span-2 text-left">POM</div>
                                             <div className="col-span-1">Tol</div>
                                             <div className="col-span-1">Std</div>
-                                            <div className="col-span-2">S1</div>
-                                            <div className="col-span-2">S2</div>
-                                            <div className="col-span-2">S3</div>
+                                            <div className="col-span-1">S1</div>
+                                            <div className="col-span-1">S2</div>
+                                            <div className="col-span-1">S3</div>
+                                            <div className="col-span-1">S4</div>
+                                            <div className="col-span-1">S5</div>
+                                            <div className="col-span-1">S6</div>
                                         </div>
                                         {fields.map((field, index) => {
                                             const m = measurements[index] || {};
-                                            const checkTol = (val: any) => {
-                                                if (!val || val === '' || !m.std) return false;
-                                                return Math.abs(parseFloat(val) - parseFloat(m.std)) > (parseFloat(m.tol) + 0.0001);
-                                            };
-
+                                            const isRed = (val: any) => checkTol(val, m.std, m.tol);
                                             return (
-                                                <div key={field.id} className="grid grid-cols-11 gap-2 mb-2 items-center">
-                                                    <div className="col-span-3"><Input {...register(`measurements.${index}.pom_name`)} readOnly className="bg-gray-50 h-8 text-xs" /></div>
-                                                    <div className="col-span-1"><Input {...register(`measurements.${index}.tol`)} readOnly className="bg-gray-50 h-8 text-xs" /></div>
-                                                    <div className="col-span-1"><Input {...register(`measurements.${index}.std`)} readOnly className="bg-gray-50 h-8 text-xs" /></div>
-                                                    <div className="col-span-2">
-                                                        <Input type="number" step="0.1" {...register(`measurements.${index}.s1`)} className={`h-8 ${checkTol(m.s1) ? 'text-red-600 font-bold bg-red-50' : ''}`} />
-                                                    </div>
-                                                    <div className="col-span-2">
-                                                        <Input type="number" step="0.1" {...register(`measurements.${index}.s2`)} className={`h-8 ${checkTol(m.s2) ? 'text-red-600 font-bold bg-red-50' : ''}`} />
-                                                    </div>
-                                                    <div className="col-span-2">
-                                                        <Input type="number" step="0.1" {...register(`measurements.${index}.s3`)} className={`h-8 ${checkTol(m.s3) ? 'text-red-600 font-bold bg-red-50' : ''}`} />
-                                                    </div>
+                                                <div key={field.id} className="min-w-[800px] grid grid-cols-10 gap-2 mb-2 items-center">
+                                                    <div className="col-span-2"><Input {...register(`measurements.${index}.pom_name`)} readOnly className="bg-gray-50 h-8 text-xs" /></div>
+                                                    <div className="col-span-1"><Input {...register(`measurements.${index}.tol`)} readOnly className="bg-gray-50 h-8 text-xs text-center" /></div>
+
+                                                    {/* Editable STD Field */}
+                                                    <div className="col-span-1"><Input {...register(`measurements.${index}.std`)} className="h-8 text-xs text-center bg-blue-50" placeholder="-" /></div>
+
+                                                    {[1, 2, 3, 4, 5, 6].map(num => {
+                                                        // FIX: Correctly typed dynamic key access
+                                                        const key = `s${num}` as keyof Measurement;
+                                                        return (
+                                                            <div key={num} className="col-span-1">
+                                                                <Input
+                                                                    type="number" step="0.1"
+                                                                    {...register(`measurements.${index}.${key}`)}
+                                                                    className={`h-8 text-center ${isRed((m as any)[key]) ? 'text-red-600 font-bold bg-red-50' : ''}`}
+                                                                />
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             );
                                         })}
                                     </div>
                                 </div>
 
+                                {/* Customer Remarks */}
                                 <div className="space-y-2">
-                                    <Label>Inspection Images (Max 4)</Label>
+                                    <Label>Customer Feedback Summary</Label>
+                                    <Textarea {...register("customer_remarks")} className="h-20 bg-yellow-50" placeholder="Paste customer comments here..." />
+                                </div>
+
+                                {/* QA Evaluation Section */}
+                                <div className="space-y-4 border p-4 rounded-lg bg-gray-50">
+                                    <Label className="text-lg font-bold">QA Comments</Label>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1"><Label>Fit Comments</Label><Textarea {...register("qa_fit_comments")} className="h-16 bg-white" /></div>
+                                        <div className="space-y-1"><Label>Workmanship</Label><Textarea {...register("qa_workmanship_comments")} className="h-16 bg-white" /></div>
+                                        <div className="space-y-1"><Label>Wash</Label><Textarea {...register("qa_wash_comments")} className="h-16 bg-white" /></div>
+                                        <div className="space-y-1"><Label>Fabric</Label><Textarea {...register("qa_fabric_comments")} className="h-16 bg-white" /></div>
+                                        <div className="space-y-1"><Label>Accessories</Label><Textarea {...register("qa_accessories_comments")} className="h-16 bg-white" /></div>
+                                    </div>
+                                </div>
+
+                                {/* Final Remarks */}
+                                <div className="space-y-2">
+                                    <Label>QA Final Remarks</Label>
+                                    <Textarea {...register("remarks")} className="h-20" placeholder="General remarks..." />
+                                </div>
+
+                                {/* Images */}
+                                <div className="space-y-2">
+                                    <Label>Images (Max 4)</Label>
                                     <div className="grid grid-cols-2 gap-4">
                                         {imageSlots.map((slot, idx) => (
                                             <div key={idx} className="border p-3 rounded-md space-y-2 bg-gray-50">
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-xs font-bold bg-white border px-2 py-1 rounded">#{idx + 1}</span>
-                                                    <Input
-                                                        type="file"
-                                                        accept="image/*"
-                                                        className="text-xs bg-white"
-                                                        onChange={(e) => handleImageChange(idx, e.target.files ? e.target.files[0] : null)}
-                                                    />
+                                                    <Input type="file" accept="image/*" className="text-xs bg-white" onChange={(e) => handleImageChange(idx, e.target.files ? e.target.files[0] : null)} />
                                                 </div>
-                                                <Input
-                                                    placeholder="Enter Caption (e.g., Front, Defect)"
-                                                    value={slot.caption}
-                                                    onChange={(e) => handleCaptionChange(idx, e.target.value)}
-                                                    className="h-8 text-sm bg-white"
-                                                />
+                                                <Input placeholder="Caption" value={slot.caption} onChange={(e) => handleCaptionChange(idx, e.target.value)} className="h-8 text-sm bg-white" />
                                             </div>
                                         ))}
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label>Remarks</Label>
-                                        <Textarea {...register("remarks")} className="h-20" />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Overall Decision</Label>
-                                        <Select onValueChange={(v) => setValue("decision", v)} required>
-                                            <SelectTrigger className="h-20 text-lg font-bold">
-                                                <SelectValue placeholder="Select Result..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Approved" className="text-green-600 font-bold">Approved</SelectItem>
-                                                <SelectItem value="Rejected" className="text-red-600 font-bold">Rejected</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                {/* Decision */}
+                                <div className="space-y-2">
+                                    <Label>Overall Decision</Label>
+                                    <div className="flex gap-4">
+                                        {['Accepted', 'Rejected', 'Represent'].map((status) => (
+                                            <div
+                                                key={status}
+                                                className={`cursor-pointer px-4 py-2 rounded-md border font-bold text-sm transition-all
+                                                    ${watch('decision') === status
+                                                        ? (status === 'Accepted' ? 'bg-green-600 text-white border-green-700' : status === 'Rejected' ? 'bg-red-600 text-white border-red-700' : 'bg-orange-500 text-white border-orange-700')
+                                                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                                                    }`}
+                                                onClick={() => setValue('decision', status)}
+                                            >
+                                                {status}
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
 
                                 <Button type="submit" className="w-full h-12 text-lg" disabled={createMutation.isPending}>
-                                    {createMutation.isPending ? 'Submitting...' : 'Save & Generate Report'}
+                                    {createMutation.isPending ? 'Saving...' : 'Save Evaluation'}
                                 </Button>
                             </form>
                         </div>
@@ -490,14 +482,10 @@ const Inspections = () => {
                 </Dialog>
             </div>
 
+            {/* Main List */}
             <div className="relative max-w-sm">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
-                <Input
-                    placeholder="Search inspections..."
-                    className="pl-8"
-                    value={listSearch}
-                    onChange={(e) => setListSearch(e.target.value)}
-                />
+                <Input placeholder="Search Style, PO or User..." className="pl-8" value={listSearch} onChange={(e) => setListSearch(e.target.value)} />
             </div>
 
             <div className="border rounded-lg bg-white">
@@ -507,7 +495,7 @@ const Inspections = () => {
                             <TableHead>Style</TableHead>
                             <TableHead>PO #</TableHead>
                             <TableHead>Stage</TableHead>
-                            <TableHead>Date</TableHead>
+                            <TableHead>User</TableHead>
                             <TableHead>Decision</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
@@ -518,10 +506,10 @@ const Inspections = () => {
                                 <TableCell className="font-medium">{inspection.style}</TableCell>
                                 <TableCell>{inspection.po_number}</TableCell>
                                 <TableCell>{inspection.stage}</TableCell>
-                                <TableCell>{new Date(inspection.created_at).toLocaleDateString()}</TableCell>
+                                <TableCell className="text-xs text-gray-500">{inspection.created_by_username || 'Unknown'}</TableCell>
                                 <TableCell>
-                                    <span className={`px-2 py-1 rounded text-xs font-bold ${inspection.decision === 'Approved' ? 'bg-green-100 text-green-800' :
-                                            inspection.decision === 'Rejected' ? 'bg-red-100 text-red-800' : 'bg-gray-100'
+                                    <span className={`px-2 py-1 rounded text-xs font-bold ${inspection.decision === 'Accepted' ? 'bg-green-100 text-green-800' :
+                                            inspection.decision === 'Rejected' ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'
                                         }`}>
                                         {inspection.decision || 'Pending'}
                                     </span>
@@ -531,8 +519,7 @@ const Inspections = () => {
                                         <FileText className="w-4 h-4" />
                                     </Button>
                                     <Button variant="outline" size="sm" onClick={() => {
-                                        const email = prompt('Enter recipient email:');
-                                        if (email) emailMutation.mutate({ id: inspection.id, email });
+                                        if (confirm(`Send report to customer for ${inspection.style}?`)) emailMutation.mutate(inspection.id)
                                     }}>
                                         <Mail className="w-4 h-4" />
                                     </Button>
@@ -546,30 +533,10 @@ const Inspections = () => {
                 </Table>
 
                 <div className="flex items-center justify-between px-4 py-4 border-t">
-                    <div className="text-sm text-gray-500">
-                        Page {page} of {Math.ceil((inspectionData?.count || 0) / 10)}
-                    </div>
+                    <div className="text-sm text-gray-500">Page {page}</div>
                     <div className="flex gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setPage(old => Math.max(old - 1, 1))}
-                            disabled={page === 1 || isPlaceholderData}
-                        >
-                            <ChevronLeft className="w-4 h-4 mr-2" /> Previous
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                                if (!isPlaceholderData && inspectionData?.next) {
-                                    setPage(old => old + 1);
-                                }
-                            }}
-                            disabled={!inspectionData?.next || isPlaceholderData}
-                        >
-                            Next <ChevronRight className="w-4 h-4 ml-2" />
-                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setPage(old => Math.max(old - 1, 1))} disabled={page === 1}><ChevronLeft className="w-4 h-4" /></Button>
+                        <Button variant="outline" size="sm" onClick={() => setPage(old => old + 1)} disabled={!inspectionData?.next || isPlaceholderData}><ChevronRight className="w-4 h-4" /></Button>
                     </div>
                 </div>
             </div>

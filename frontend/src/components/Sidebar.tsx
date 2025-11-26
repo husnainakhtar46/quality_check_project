@@ -9,7 +9,7 @@ const Sidebar = () => {
 
     const allLinks = [
         { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, adminOnly: true },
-        { href: '/inspections', label: 'Inspections', icon: ClipboardCheck, adminOnly: false },
+        { href: '/inspections', label: 'Sample Evaluation', icon: ClipboardCheck, adminOnly: false },
         { href: '/templates', label: 'Templates', icon: FileText, adminOnly: false },
         { href: '/customers', label: 'Customers', icon: Users, adminOnly: true },
     ];

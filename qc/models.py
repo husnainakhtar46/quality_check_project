@@ -37,7 +37,7 @@ class TemplatePOM(models.Model):
     template = models.ForeignKey(Template, related_name="poms", on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
     default_tol = models.FloatField(default=0.0)
-    default_std = models.FloatField(default=0.0)
+    default_std = models.FloatField(null=True, blank=True) # Changed to allow empty
     order = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -47,17 +47,35 @@ class TemplatePOM(models.Model):
         return f"{self.template.name} - {self.name}"
 
 class Inspection(models.Model):
-    STAGE_CHOICES = [("Proto","Proto"), ("PPS","PPS"), ("Production","Production")]
-    DECISION_CHOICES = [("Approved","Approved"), ("Rejected","Rejected")]
+    # Updated Stages
+    STAGE_CHOICES = [
+        ("Dev", "Dev"), ("Proto", "Proto"), ("Fit", "Fit"),
+        ("SMS", "SMS"), ("Size Set", "Size Set"), ("Production", "Production")
+    ]
+    # Updated Decisions
+    DECISION_CHOICES = [
+        ("Accepted", "Accepted"), ("Rejected", "Rejected"), ("Represent", "Represent")
+    ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     style = models.CharField(max_length=255)
     color = models.CharField(max_length=255, blank=True)
     po_number = models.CharField(max_length=255, blank=True)
-    stage = models.CharField(max_length=20, choices=STAGE_CHOICES, default="PPS")
+    stage = models.CharField(max_length=20, choices=STAGE_CHOICES, default="Proto")
     template = models.ForeignKey(Template, null=True, on_delete=models.SET_NULL)
     customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL)
-    remarks = models.TextField(blank=True)
+    
+    # New Specific Comment Fields
+    customer_remarks = models.TextField(blank=True, verbose_name="Customer Feedback")
+    qa_fit_comments = models.TextField(blank=True, verbose_name="Fit Comments")
+    qa_workmanship_comments = models.TextField(blank=True, verbose_name="Workmanship Comments")
+    qa_wash_comments = models.TextField(blank=True, verbose_name="Wash Comments")
+    qa_fabric_comments = models.TextField(blank=True, verbose_name="Fabric Comments")
+    qa_accessories_comments = models.TextField(blank=True, verbose_name="Accessories Comments")
+
+    # General Remarks
+    remarks = models.TextField(blank=True, verbose_name="General Remarks")
+    
     decision = models.CharField(max_length=20, choices=DECISION_CHOICES, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
@@ -71,20 +89,25 @@ class Measurement(models.Model):
     inspection = models.ForeignKey(Inspection, related_name="measurements", on_delete=models.CASCADE)
     pom_name = models.CharField(max_length=255)
     tol = models.FloatField(default=0.0)
-    std = models.FloatField(default=0.0)
+    std = models.FloatField(null=True, blank=True) # Changed to allow empty
+    
+    # Expanded to 6 samples
     s1 = models.FloatField(null=True, blank=True)
     s2 = models.FloatField(null=True, blank=True)
     s3 = models.FloatField(null=True, blank=True)
+    s4 = models.FloatField(null=True, blank=True)
+    s5 = models.FloatField(null=True, blank=True)
+    s6 = models.FloatField(null=True, blank=True)
+    
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="OK")
 
     def __str__(self):
         return f"{self.pom_name} - {self.inspection.style}"
 
 class InspectionImage(models.Model):
-    # Removed TYPE_CHOICES to allow any custom text
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     inspection = models.ForeignKey(Inspection, related_name="images", on_delete=models.CASCADE)
-    caption = models.CharField(max_length=100, default="Inspection Image") # New field for custom text
+    caption = models.CharField(max_length=100, default="Inspection Image")
     image = models.ImageField(upload_to="inspection_images/")
     uploaded_at = models.DateTimeField(auto_now_add=True)
 

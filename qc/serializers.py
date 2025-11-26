@@ -53,30 +53,50 @@ class TemplateSerializer(serializers.ModelSerializer):
 class MeasurementSerializer(serializers.ModelSerializer):
     class Meta:
         model = Measurement
-        fields = ["id","pom_name","tol","std","s1","s2","s3","status"]
+        # Added s4, s5, s6
+        fields = ["id","pom_name","tol","std","s1","s2","s3","s4","s5","s6","status"]
 
 class InspectionImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = InspectionImage
-        # --- FIX IS HERE: Changed 'type' to 'caption' ---
         fields = ["id","caption","image","uploaded_at"]
 
 class InspectionListSerializer(serializers.ModelSerializer):
+    # Added created_by_username for filtering/display
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
     class Meta:
         model = Inspection
         fields = [
             "id","style","color","po_number","stage","template","customer",
-            "remarks","decision","created_at"
+            "remarks","decision","created_at", "created_by_username"
+        ]
+
+class InspectionCopySerializer(serializers.ModelSerializer):
+    measurements = MeasurementSerializer(many=True, read_only=True)
+    class Meta:
+        model = Inspection
+        fields = [
+            "id","style","color","po_number","stage","template","customer",
+            # Added new comment fields
+            "customer_remarks", "qa_fit_comments", "qa_workmanship_comments", 
+            "qa_wash_comments", "qa_fabric_comments", "qa_accessories_comments",
+            "remarks","decision","created_at","measurements" 
         ]
 
 class InspectionSerializer(serializers.ModelSerializer):
     measurements = MeasurementSerializer(many=True)
     images = InspectionImageSerializer(many=True, read_only=True)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+
     class Meta:
         model = Inspection
         fields = [
             "id","style","color","po_number","stage","template","customer",
-            "remarks","decision","created_at","measurements","images"
+            # Added new comment fields
+            "customer_remarks", "qa_fit_comments", "qa_workmanship_comments", 
+            "qa_wash_comments", "qa_fabric_comments", "qa_accessories_comments",
+            "remarks","decision","created_at","measurements","images",
+            "created_by_username"
         ]
 
     def create(self, validated_data):

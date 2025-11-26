@@ -27,7 +27,6 @@ import {
 type POM = {
     name: string;
     default_tol: number;
-    default_std: number;
 };
 
 type TemplateForm = {
@@ -42,7 +41,7 @@ const Templates = () => {
 
     const { register, control, handleSubmit, reset } = useForm<TemplateForm>({
         defaultValues: {
-            poms: [{ name: '', default_tol: 0, default_std: 0 }]
+            poms: [{ name: '', default_tol: 0 }]
         }
     });
 
@@ -116,7 +115,7 @@ const Templates = () => {
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center">
                                     <Label>Points of Measure (POM)</Label>
-                                    <Button type="button" variant="outline" size="sm" onClick={() => append({ name: '', default_tol: 0, default_std: 0 })}>
+                                    <Button type="button" variant="outline" size="sm" onClick={() => append({ name: '', default_tol: 0 })}>
                                         <Plus className="w-4 h-4 mr-2" />
                                         Add POM
                                     </Button>
@@ -129,13 +128,9 @@ const Templates = () => {
                                                 <Label className="text-xs">POM Name</Label>
                                                 <Input {...register(`poms.${index}.name` as const, { required: true })} placeholder="Chest Width" />
                                             </div>
-                                            <div className="w-24">
-                                                <Label className="text-xs">Tol (+/-)</Label>
+                                            <div className="w-32">
+                                                <Label className="text-xs">Tolerance (+/-)</Label>
                                                 <Input type="number" step="0.1" {...register(`poms.${index}.default_tol` as const)} />
-                                            </div>
-                                            <div className="w-24">
-                                                <Label className="text-xs">Std</Label>
-                                                <Input type="number" step="0.1" {...register(`poms.${index}.default_std` as const)} />
                                             </div>
                                             <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
                                                 <Trash2 className="w-4 h-4 text-red-500" />
