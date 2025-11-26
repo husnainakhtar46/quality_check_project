@@ -59,7 +59,7 @@ class Inspection(models.Model):
     # Updated Stages
     STAGE_CHOICES = [
         ("Dev", "Dev"), ("Proto", "Proto"), ("Fit", "Fit"),
-        ("SMS", "SMS"), ("Size Set", "Size Set"), ("Production", "Production")
+        ("SMS", "SMS"), ("Size Set", "Size Set"), ("PPS", "PPS"), ("Shipment Sample", "Shipment Sample")
     ]
     # Updated Decisions
     DECISION_CHOICES = [

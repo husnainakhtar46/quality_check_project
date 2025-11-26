@@ -39,7 +39,7 @@ const Templates = () => {
     const queryClient = useQueryClient();
     const [isOpen, setIsOpen] = useState(false);
 
-    const { register, control, handleSubmit, reset } = useForm<TemplateForm>({
+    const { register, control, handleSubmit, reset, getValues, setValue } = useForm<TemplateForm>({
         defaultValues: {
             poms: [{ name: '', default_tol: 0 }]
         }
@@ -49,6 +49,55 @@ const Templates = () => {
         control,
         name: "poms"
     });
+
+    // Excel-style paste handler
+    const handlePaste = (rowIndex: number, startColumn: 'name' | 'default_tol') => (event: React.ClipboardEvent<HTMLInputElement>) => {
+        const pastedData = event.clipboardData.getData('text');
+        const lines = pastedData.split('\n').filter(line => line.trim());
+        
+        if (lines.length > 0) {
+            event.preventDefault();
+            const currentPoms = getValues('poms');
+            const columnOrder = ['name', 'default_tol'];
+            const startColIndex = columnOrder.indexOf(startColumn);
+            
+            // Auto-detect header
+            const hasHeader = /pom|name|tolerance|tol/i.test(lines[0]);
+            const dataRows = hasHeader ? lines.slice(1) : lines;
+            
+            const newItems: POM[] = [];
+            
+            dataRows.forEach((line, rowOffset) => {
+                const targetRow = rowIndex + rowOffset;
+                const columns = line.split('\t');
+                
+                // If updating existing row
+                if (targetRow < currentPoms.length) {
+                    columns.forEach((value, colOffset) => {
+                        const targetColIndex = startColIndex + colOffset;
+                        if (targetColIndex === 0) setValue(`poms.${targetRow}.name`, value.trim());
+                        if (targetColIndex === 1) setValue(`poms.${targetRow}.default_tol`, parseFloat(value.trim()) || 0);
+                    });
+                } else {
+                    // If new row
+                    const newIndex = targetRow - currentPoms.length;
+                    if (!newItems[newIndex]) newItems[newIndex] = { name: '', default_tol: 0 };
+                    
+                    columns.forEach((value, colOffset) => {
+                        const targetColIndex = startColIndex + colOffset;
+                        if (targetColIndex === 0) newItems[newIndex].name = value.trim();
+                        if (targetColIndex === 1) newItems[newIndex].default_tol = parseFloat(value.trim()) || 0;
+                    });
+                }
+            });
+            
+            if (newItems.length > 0) {
+                append(newItems);
+            }
+            
+            toast.success(`Pasted ${dataRows.length} rows!`);
+        }
+    };
 
     const { data: templates, isLoading } = useQuery({
         queryKey: ['templates'],
@@ -126,11 +175,11 @@ const Templates = () => {
                                         <div key={field.id} className="flex gap-2 items-end">
                                             <div className="flex-1">
                                                 <Label className="text-xs">POM Name</Label>
-                                                <Input {...register(`poms.${index}.name` as const, { required: true })} placeholder="Chest Width" />
+                                                <Input {...register(`poms.${index}.name` as const, { required: true })} placeholder="Chest Width" onPaste={handlePaste(index, 'name')} />
                                             </div>
                                             <div className="w-32">
                                                 <Label className="text-xs">Tolerance (+/-)</Label>
-                                                <Input type="number" step="0.1" {...register(`poms.${index}.default_tol` as const)} />
+                                                <Input type="number" step="0.1" {...register(`poms.${index}.default_tol` as const)} onPaste={handlePaste(index, 'default_tol')} />
                                             </div>
                                             <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
                                                 <Trash2 className="w-4 h-4 text-red-500" />

@@ -71,7 +71,7 @@ const Inspections = () => {
         { file: null, caption: '' }, { file: null, caption: '' },
     ]);
 
-    const { register, control, handleSubmit, reset, setValue, watch } = useForm({
+    const { register, control, handleSubmit, reset, setValue, watch, getValues } = useForm({
         defaultValues: {
             style: '', color: '', po_number: '', stage: 'Proto',
             customer: '', template: '',
@@ -190,6 +190,59 @@ const Inspections = () => {
             }
         }
     }, [selectedTemplate, templates, replace, isManualTemplateChange]);
+
+    // Paste handler for Excel/Sheets data - works like Excel paste
+    const handleMeasurementPaste = (rowIndex: number, startColumn: string) => (event: React.ClipboardEvent<HTMLInputElement>) => {
+        const pastedData = event.clipboardData.getData('text');
+
+        // Check if it's multi-line or multi-column data
+        const lines = pastedData.split('\n').filter(line => line.trim());
+        const firstLineColumns = lines[0]?.split('\t') || [];
+
+        // Only intercept if pasting multiple rows OR multiple columns
+        if (lines.length > 1 || firstLineColumns.length > 1) {
+            event.preventDefault();
+
+            // Get current measurements
+            const currentMeasurements = getValues('measurements');
+
+            // Define column order for measurements
+            const columnOrder = ['std', 's1', 's2', 's3', 's4', 's5', 's6'];
+            const startColIndex = columnOrder.indexOf(startColumn);
+
+            if (startColIndex === -1) return; // Invalid column
+
+            // Auto-detect header row
+            const hasHeader = /pom|name|std|s1|s2|s3|s4|s5|s6/i.test(lines[0]);
+            const dataRows = hasHeader ? lines.slice(1) : lines;
+
+            const affectedRows = Math.min(dataRows.length, currentMeasurements.length - rowIndex);
+
+            // Ask for confirmation
+            if (!confirm(`Paste ${dataRows.length} row(s) × ${firstLineColumns.length} column(s) starting from ${startColumn.toUpperCase()} at row ${rowIndex + 1}?`)) {
+                return;
+            }
+
+            // Paste data starting from the exact cell
+            dataRows.forEach((line, rowOffset) => {
+                const targetRow = rowIndex + rowOffset;
+                if (targetRow < currentMeasurements.length) {
+                    const columns = line.split('\t');
+
+                    // Paste each column starting from startColumn
+                    columns.forEach((value, colOffset) => {
+                        const targetColIndex = startColIndex + colOffset;
+                        if (targetColIndex < columnOrder.length) {
+                            const fieldName = columnOrder[targetColIndex];
+                            setValue(`measurements.${targetRow}.${fieldName}` as any, value?.trim() || '');
+                        }
+                    });
+                }
+            });
+
+            toast.success(`Pasted ${affectedRows} row(s) starting from ${startColumn.toUpperCase()} at row ${rowIndex + 1}!`);
+        }
+    };
 
     const createMutation = useMutation({
         mutationFn: async (data: any) => {
@@ -342,7 +395,7 @@ const Inspections = () => {
                                         <Select onValueChange={(v) => setValue("stage", v)} defaultValue={watch('stage')}>
                                             <SelectTrigger><SelectValue /></SelectTrigger>
                                             <SelectContent>
-                                                {['Dev', 'Proto', 'Fit', 'SMS', 'Size Set', 'Production'].map(s => (
+                                                {['Dev', 'Proto', 'Fit', 'SMS', 'Size Set', 'PPS', 'Shipment Sample'].map(s => (
                                                     <SelectItem key={s} value={s}>{s}</SelectItem>
                                                 ))}
                                             </SelectContent>
@@ -392,7 +445,7 @@ const Inspections = () => {
                                                     <div className="col-span-1"><Input {...register(`measurements.${index}.tol`)} readOnly className="bg-gray-50 h-8 text-xs text-center" /></div>
 
                                                     {/* Editable STD Field */}
-                                                    <div className="col-span-1"><Input {...register(`measurements.${index}.std`)} className="h-8 text-xs text-center bg-blue-50" placeholder="-" /></div>
+                                                    <div className="col-span-1"><Input {...register(`measurements.${index}.std`)} className="h-8 text-xs text-center bg-blue-50" placeholder="-" onPaste={handleMeasurementPaste(index, 'std')} /></div>
 
                                                     {[1, 2, 3, 4, 5, 6].map(num => {
                                                         // FIX: Correctly typed dynamic key access
@@ -403,6 +456,7 @@ const Inspections = () => {
                                                                     type="number" step="0.1"
                                                                     {...register(`measurements.${index}.${key}`)}
                                                                     className={`h-8 text-center ${isRed((m as any)[key]) ? 'text-red-600 font-bold bg-red-50' : ''}`}
+                                                                    onPaste={handleMeasurementPaste(index, key)}
                                                                 />
                                                             </div>
                                                         );
@@ -509,7 +563,7 @@ const Inspections = () => {
                                 <TableCell className="text-xs text-gray-500">{inspection.created_by_username || 'Unknown'}</TableCell>
                                 <TableCell>
                                     <span className={`px-2 py-1 rounded text-xs font-bold ${inspection.decision === 'Accepted' ? 'bg-green-100 text-green-800' :
-                                            inspection.decision === 'Rejected' ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'
+                                        inspection.decision === 'Rejected' ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'
                                         }`}>
                                         {inspection.decision || 'Pending'}
                                     </span>
