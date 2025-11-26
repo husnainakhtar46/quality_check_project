@@ -377,7 +377,13 @@ const Inspections = () => {
                                                 <div key={item.id} className="p-3 hover:bg-blue-50 cursor-pointer border-b last:border-0 text-sm" onClick={() => handleLoadInspection(item.id)}>
                                                     <span className="font-bold">{item.style}</span>
                                                     <span className="mx-2 text-gray-400">|</span>
-                                                    <span className="font-medium text-blue-600">PO: {item.po_number}</span>
+                                                    <span>{item.po_number}</span>
+                                                    <span className="mx-2 text-gray-400">|</span>
+                                                    <span>{item.color}</span>
+                                                    <span className="mx-2 text-gray-400">|</span>
+                                                    <span className="text-blue-600 font-medium">{item.stage}</span>
+                                                    <span className="mx-2 text-gray-400">|</span>
+                                                    <span className="text-gray-500">{new Date(item.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '-')}</span>
                                                 </div>
                                             ))}
                                         </div>
