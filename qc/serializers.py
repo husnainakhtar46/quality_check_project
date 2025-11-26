@@ -13,7 +13,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 class CustomerEmailSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomerEmail
-        fields = ["id", "email"]
+        fields = ["id", "contact_name", "email", "email_type"]
 
 class CustomerSerializer(serializers.ModelSerializer):
     emails = CustomerEmailSerializer(many=True, read_only=True)

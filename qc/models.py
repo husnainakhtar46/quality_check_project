@@ -15,12 +15,21 @@ class Customer(models.Model):
         return self.name
 
 class CustomerEmail(models.Model):
+    EMAIL_TYPE_CHOICES = [
+        ('to', 'To'),
+        ('cc', 'CC'),
+    ]
+    
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     customer = models.ForeignKey(Customer, related_name="emails", on_delete=models.CASCADE)
+    contact_name = models.CharField(max_length=255, blank=True)
     email = models.EmailField()
+    email_type = models.CharField(max_length=2, choices=EMAIL_TYPE_CHOICES, default='to')
 
     def __str__(self):
-        return f"{self.email} ({self.customer.name})"
+        if self.contact_name:
+            return f"{self.contact_name} <{self.email}> [{self.get_email_type_display()}] ({self.customer.name})"
+        return f"{self.email} [{self.get_email_type_display()}] ({self.customer.name})"
 
 class Template(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

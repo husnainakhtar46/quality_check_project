@@ -269,14 +269,16 @@ class InspectionViewSet(viewsets.ModelViewSet):
     def send_email(self, request, pk=None):
         inspection = self.get_object()
         
-        # Auto-fetch customer emails
+        # Separate emails by type (To/CC)
         if inspection.customer:
-            to_emails = list(inspection.customer.emails.values_list('email', flat=True))
+            to_emails = list(inspection.customer.emails.filter(email_type='to').values_list('email', flat=True))
+            cc_emails = list(inspection.customer.emails.filter(email_type='cc').values_list('email', flat=True))
         else:
             to_emails = []
+            cc_emails = []
             
         if not to_emails:
-             return Response({"error": "No recipients found. Add emails to the Customer first."}, status=status.HTTP_400_BAD_REQUEST)
+             return Response({"error": "No 'To' recipients found. Add at least one 'To' email to the Customer first."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Updated Subject and Body
         date_str = inspection.created_at.strftime('%Y-%m-%d')
@@ -293,10 +295,10 @@ class InspectionViewSet(viewsets.ModelViewSet):
         )
         
         buffer = generate_pdf_buffer(inspection)
-        email = EmailMessage(subject, body, settings.EMAIL_HOST_USER, to_emails)
+        email = EmailMessage(subject, body, settings.EMAIL_HOST_USER, to_emails, cc=cc_emails if cc_emails else None)
         email.attach(f"{inspection.style}_{inspection.po_number}_Report.pdf", buffer.getvalue(), "application/pdf")
         email.send(fail_silently=False)
-        return Response({"sent": True, "recipients": to_emails})
+        return Response({"sent": True, "to": to_emails, "cc": cc_emails})
 
 class CustomerViewSet(viewsets.ModelViewSet):
     queryset = Customer.objects.all()
