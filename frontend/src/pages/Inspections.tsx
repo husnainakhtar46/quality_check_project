@@ -566,6 +566,7 @@ const Inspections = () => {
                             <TableHead>Style</TableHead>
                             <TableHead>PO #</TableHead>
                             <TableHead>Stage</TableHead>
+                            <TableHead>Created</TableHead>
                             <TableHead>User</TableHead>
                             <TableHead>Decision</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
@@ -577,6 +578,16 @@ const Inspections = () => {
                                 <TableCell className="font-medium">{inspection.style}</TableCell>
                                 <TableCell>{inspection.po_number}</TableCell>
                                 <TableCell>{inspection.stage}</TableCell>
+                                <TableCell className="text-xs text-gray-600">
+                                    {new Date(inspection.created_at).toLocaleString('en-GB', {
+                                        day: '2-digit',
+                                        month: '2-digit',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                        hour12: false
+                                    }).replace(',', '')}
+                                </TableCell>
                                 <TableCell className="text-xs text-gray-500">{inspection.created_by_username || 'Unknown'}</TableCell>
                                 <TableCell>
                                     <span className={`px-2 py-1 rounded text-xs font-bold ${inspection.decision === 'Accepted' ? 'bg-green-100 text-green-800' :
