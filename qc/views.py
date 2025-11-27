@@ -207,7 +207,8 @@ def generate_pdf_buffer(inspection):
                 p.setFont("Helvetica-Bold", 10)
                 p.setFillColorRGB(0, 0, 0)
                 caption = img_obj.caption or "Image"
-                p.drawString(x, y - 15, caption)
+                # Center-align caption under the image (image width is 250, so center is x + 125)
+                p.drawCentredString(x + 125, y - 15, caption)
             except Exception as e:
                 p.drawString(x, y, "Error loading image")
 
