@@ -315,6 +315,15 @@ class CustomerViewSet(viewsets.ModelViewSet):
 class TemplateViewSet(viewsets.ModelViewSet):
     queryset = Template.objects.all()
     serializer_class = TemplateSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['name', 'customer__name']
+
+    def get_queryset(self):
+        queryset = Template.objects.all()
+        customer_id = self.request.query_params.get('customer')
+        if customer_id:
+            queryset = queryset.filter(customer_id=customer_id)
+        return queryset
 
 class DashboardView(APIView):
     def get(self, request):

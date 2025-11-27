@@ -30,7 +30,7 @@ class TemplateSerializer(serializers.ModelSerializer):
     poms = TemplatePOMSerializer(many=True)
     class Meta:
         model = Template
-        fields = ["id", "name", "description", "created_at", "poms"]
+        fields = ["id", "name", "description", "created_at", "poms", "customer"]
 
     def create(self, validated_data):
         poms_data = validated_data.pop("poms", [])
@@ -47,7 +47,14 @@ class TemplateSerializer(serializers.ModelSerializer):
         if poms_data is not None:
             instance.poms.all().delete()
             for i, pom in enumerate(poms_data):
-                TemplatePOM.objects.create(template=instance, order=i, **pom)
+                # Use explicit fields to avoid any extra data issues
+                TemplatePOM.objects.create(
+                    template=instance,
+                    order=i,
+                    name=pom.get('name', ''),
+                    default_tol=pom.get('default_tol', 0.0),
+                    default_std=pom.get('default_std', None),
+                )
         return instance
 
 class MeasurementSerializer(serializers.ModelSerializer):

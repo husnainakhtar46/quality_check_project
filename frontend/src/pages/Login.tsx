@@ -44,7 +44,7 @@ const Login = () => {
             <Card className="w-[400px]">
                 <CardHeader>
                     <CardTitle>Welcome Back</CardTitle>
-                    <CardDescription>Sign in to access the QC System</CardDescription>
+                    <CardDescription>Sign in to access the Fit Flow</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-4">

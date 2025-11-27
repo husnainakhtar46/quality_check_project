@@ -47,8 +47,6 @@ type Measurement = {
     s3: number | string;
     s4: number | string;
     s5: number | string;
-    s6: number | string;
-    status: string;
 };
 
 const Inspections = () => {
@@ -110,15 +108,18 @@ const Inspections = () => {
         placeholderData: (previousData) => previousData,
     });
 
-    const { data: customers } = useQuery({
+    const { data: customersData } = useQuery({
         queryKey: ['customers'],
         queryFn: async () => (await api.get('/customers/')).data,
     });
 
-    const { data: templates } = useQuery({
+    const { data: templatesData } = useQuery({
         queryKey: ['templates'],
         queryFn: async () => (await api.get('/templates/')).data,
     });
+
+    const customers = Array.isArray(customersData) ? customersData : customersData?.results || [];
+    const templates = Array.isArray(templatesData) ? templatesData : templatesData?.results || [];
 
     const { data: modalSearchResults, isLoading: isSearchingModal } = useQuery({
         queryKey: ['inspectionSearch', debouncedModalSearchTerm],
@@ -409,7 +410,11 @@ const Inspections = () => {
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Customer</Label>
-                                        <Select value={watch("customer")} onValueChange={(v) => setValue("customer", v)}>
+                                        <Select value={watch("customer")} onValueChange={(v) => {
+                                            setValue("customer", v);
+                                            setValue("template", "");
+                                            setSelectedTemplate(null);
+                                        }}>
                                             <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
                                             <SelectContent>
                                                 {customers?.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
@@ -418,10 +423,16 @@ const Inspections = () => {
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Template</Label>
-                                        <Select value={watch("template")} onValueChange={(v) => { setIsManualTemplateChange(true); setValue("template", v); setSelectedTemplate(v); }}>
-                                            <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                                        <Select
+                                            value={watch("template")}
+                                            onValueChange={(v) => { setIsManualTemplateChange(true); setValue("template", v); setSelectedTemplate(v); }}
+                                            disabled={!watch("customer")}
+                                        >
+                                            <SelectTrigger><SelectValue placeholder={watch("customer") ? "Select Template..." : "Select Customer First"} /></SelectTrigger>
                                             <SelectContent>
-                                                {templates?.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                                                {templates?.filter((t: any) => t.customer === watch("customer") || !t.customer).map((t: any) => (
+                                                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                                ))}
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -600,7 +611,7 @@ const Inspections = () => {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 
