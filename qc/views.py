@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
+from django_filters.rest_framework import DjangoFilterBackend
 from django.core.mail import EmailMessage
 from django.conf import settings
 from django.http import FileResponse
@@ -11,13 +12,14 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.utils import ImageReader
 from PIL import Image as PILImage
-from .models import Customer, CustomerEmail, Template, Inspection, InspectionImage, Measurement
+from .models import Customer, CustomerEmail, Template, Inspection, InspectionImage, Measurement, FilterPreset
 from .serializers import (
     CustomerSerializer, CustomerEmailSerializer, TemplateSerializer, 
     InspectionSerializer, InspectionListSerializer, CustomTokenObtainPairSerializer,
-    InspectionCopySerializer
+    InspectionCopySerializer, FilterPresetSerializer
 )
 from django.db.models import Prefetch
+from .filters import InspectionFilter
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
@@ -220,9 +222,11 @@ class InspectionViewSet(viewsets.ModelViewSet):
     queryset = Inspection.objects.all()
     serializer_class = InspectionSerializer
     
-    filter_backends = [filters.SearchFilter]
-    # Added created_by__username to search fields
-    search_fields = ['style', 'po_number', 'customer__name', 'created_by__username'] 
+    # Use django-filter for advanced filtering + ordering
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_class = InspectionFilter
+    ordering_fields = ['created_at', 'style', 'decision', 'stage']
+    ordering = ['-created_at'] 
 
     def get_queryset(self):
         queryset = Inspection.objects.select_related('customer', 'template', 'created_by').order_by("-created_at")
@@ -358,6 +362,19 @@ class TemplateViewSet(viewsets.ModelViewSet):
         if customer_id:
             queryset = queryset.filter(customer_id=customer_id)
         return queryset
+
+
+class FilterPresetViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing user filter presets"""
+    serializer_class = FilterPresetSerializer
+    
+    def get_queryset(self):
+        # Only return presets for the current user
+        return FilterPreset.objects.filter(user=self.request.user)
+    
+    def perform_create(self, serializer):
+        # Auto-assign the current user when creating a preset
+        serializer.save(user=self.request.user)
 
 class DashboardView(APIView):
     def get(self, request):

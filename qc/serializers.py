@@ -1,6 +1,6 @@
 # qc/serializers.py
 from rest_framework import serializers
-from .models import Customer, CustomerEmail, Template, TemplatePOM, Inspection, Measurement, InspectionImage
+from .models import Customer, CustomerEmail, Template, TemplatePOM, Inspection, Measurement, InspectionImage, FilterPreset
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -47,7 +47,6 @@ class TemplateSerializer(serializers.ModelSerializer):
         if poms_data is not None:
             instance.poms.all().delete()
             for i, pom in enumerate(poms_data):
-                # Use explicit fields to avoid any extra data issues
                 TemplatePOM.objects.create(
                     template=instance,
                     order=i,
@@ -60,7 +59,6 @@ class TemplateSerializer(serializers.ModelSerializer):
 class MeasurementSerializer(serializers.ModelSerializer):
     class Meta:
         model = Measurement
-        # Added s4, s5, s6
         fields = ["id","pom_name","tol","std","s1","s2","s3","s4","s5","s6","status"]
 
 class InspectionImageSerializer(serializers.ModelSerializer):
@@ -69,7 +67,6 @@ class InspectionImageSerializer(serializers.ModelSerializer):
         fields = ["id","caption","image","uploaded_at"]
 
 class InspectionListSerializer(serializers.ModelSerializer):
-    # Added created_by_username for filtering/display
     created_by_username = serializers.CharField(source='created_by.username', read_only=True)
     class Meta:
         model = Inspection
@@ -84,7 +81,6 @@ class InspectionCopySerializer(serializers.ModelSerializer):
         model = Inspection
         fields = [
             "id","style","color","po_number","stage","template","customer",
-            # Added new comment fields
             "customer_remarks", "qa_fit_comments", "qa_workmanship_comments", 
             "qa_wash_comments", "qa_fabric_comments", "qa_accessories_comments",
             "remarks","decision","created_at","measurements" 
@@ -99,11 +95,10 @@ class InspectionSerializer(serializers.ModelSerializer):
         model = Inspection
         fields = [
             "id","style","color","po_number","stage","template","customer",
-            # Added new comment fields
             "customer_remarks", "qa_fit_comments", "qa_workmanship_comments", 
             "qa_wash_comments", "qa_fabric_comments", "qa_accessories_comments",
             "remarks","decision","created_at","measurements","images",
-            "created_by_username"
+           "created_by_username"
         ]
 
     def create(self, validated_data):
@@ -123,3 +118,9 @@ class InspectionSerializer(serializers.ModelSerializer):
             for m in measurements_data:
                 Measurement.objects.create(inspection=instance, **m)
         return instance
+
+class FilterPresetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FilterPreset
+        fields = ["id", "name", "description", "filters", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]

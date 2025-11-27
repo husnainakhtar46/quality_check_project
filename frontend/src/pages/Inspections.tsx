@@ -30,6 +30,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '../components/ui/dialog';
+import InspectionFilters from '../components/InspectionFilters';
 
 // --- TYPE DEFINITIONS ---
 type ImageSlot = {
@@ -59,6 +60,17 @@ const Inspections = () => {
     const [page, setPage] = useState(1);
     const [listSearch, setListSearch] = useState('');
     const [debouncedListSearch, setDebouncedListSearch] = useState('');
+
+    // Filter state for advanced filtering
+    const [filters, setFilters] = useState({
+        dateFrom: '',
+        dateTo: '',
+        decisions: [] as string[],
+        stages: [] as string[],
+        customer: '',
+        search: '',
+        ordering: '-created_at',
+    });
 
     const [modalSearchTerm, setModalSearchTerm] = useState('');
     const [debouncedModalSearchTerm, setDebouncedModalSearchTerm] = useState('');
@@ -98,11 +110,23 @@ const Inspections = () => {
 
     // Fetching
     const { data: inspectionData, isLoading, isPlaceholderData } = useQuery({
-        queryKey: ['inspections', page, debouncedListSearch],
+        queryKey: ['inspections', page, filters],
         queryFn: async () => {
             const params = new URLSearchParams();
             params.append('page', page.toString());
-            if (debouncedListSearch) params.append('search', debouncedListSearch);
+            
+            // Add filter parameters
+            if (filters.dateFrom) params.append('created_at_after', filters.dateFrom);
+            if (filters.dateTo) params.append('created_at_before', filters.dateTo);
+            if (filters.decisions.length > 0) {
+                filters.decisions.forEach(d => params.append('decision', d));
+            }
+            if (filters.stages.length > 0) {
+                filters.stages.forEach(s => params.append('stage', s));
+            }
+            if (filters.customer) params.append('customer', filters.customer);
+            if (filters.search) params.append('search', filters.search);
+            if (filters.ordering) params.append('ordering', filters.ordering);
             return (await api.get(`/inspections/?${params.toString()}`)).data;
         },
         placeholderData: (previousData) => previousData,
@@ -286,6 +310,25 @@ const Inspections = () => {
             toast.error('Failed to save');
         }
     });
+
+    // Filter handlers
+    const handleFiltersChange = (newFilters: typeof filters) => {
+        setFilters(newFilters);
+        setPage(1); // Reset to first page when filters change
+    };
+
+    const handleClearFilters = () => {
+        setFilters({
+            dateFrom: '',
+            dateTo: '',
+            decisions: [],
+            stages: [],
+            customer: '',
+            search: '',
+            ordering: '-created_at',
+        });
+        setPage(1);
+    };
 
     const deleteMutation = useMutation({
         mutationFn: async (id: string) => api.delete(`/inspections/${id}/`),
@@ -554,6 +597,12 @@ const Inspections = () => {
             </div>
 
             {/* Main List */}
+            <InspectionFilters
+                filters={filters}
+                onFiltersChange={handleFiltersChange}
+                onClearAll={handleClearFilters}
+            />
+
             <div className="relative max-w-sm">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
                 <Input placeholder="Search Style, PO or User..." className="pl-8" value={listSearch} onChange={(e) => setListSearch(e.target.value)} />

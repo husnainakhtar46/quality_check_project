@@ -123,3 +123,19 @@ class InspectionImage(models.Model):
 
     def __str__(self):
         return f"{self.inspection} - {self.caption}"
+
+class FilterPreset(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="filter_presets")
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    filters = models.JSONField(default=dict)  # Store filter parameters as JSON
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        unique_together = [["user", "name"]]  # Prevent duplicate names per user
+
+    def __str__(self):
+        return f"{self.user.username} - {self.name}"
