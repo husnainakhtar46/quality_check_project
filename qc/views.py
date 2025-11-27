@@ -199,7 +199,7 @@ def generate_pdf_buffer(inspection):
                     if pil_img.mode in ("RGBA", "P"): pil_img = pil_img.convert("RGB")
                     pil_img.thumbnail((800, 800))
                     img_buffer = io.BytesIO()
-                    pil_img.save(img_buffer, format='JPEG', quality=60, optimize=True)
+                    pil_img.save(img_buffer, format='JPEG', quality=85, optimize=True)
                     img_buffer.seek(0)
                     reportlab_img = ImageReader(img_buffer)
                     p.drawImage(reportlab_img, x, y, width=250, height=200, preserveAspectRatio=True)
@@ -258,13 +258,46 @@ class InspectionViewSet(viewsets.ModelViewSet):
         
         if not image_file:
             return Response({"error": "No image provided"}, status=status.HTTP_400_BAD_REQUEST)
-            
-        InspectionImage.objects.create(
-            inspection=inspection,
-            image=image_file,
-            caption=caption
-        )
-        return Response({"status": "Image uploaded"}, status=status.HTTP_201_CREATED)
+        
+        try:
+            # Open and compress the image
+            with PILImage.open(image_file) as img:
+                # Convert RGBA/P to RGB for WebP compatibility
+                if img.mode in ("RGBA", "P", "LA"):
+                    # Create white background for transparency
+                    rgb_img = PILImage.new("RGB", img.size, (255, 255, 255))
+                    if img.mode == "P":
+                        img = img.convert("RGBA")
+                    rgb_img.paste(img, mask=img.split()[-1] if img.mode in ("RGBA", "LA") else None)
+                    img = rgb_img
+                elif img.mode != "RGB":
+                    img = img.convert("RGB")
+                
+                # Resize to max 1600x1600 (maintains aspect ratio)
+                img.thumbnail((1600, 1600), PILImage.Resampling.LANCZOS)
+                
+                # Save as WebP with quality 85
+                compressed_buffer = io.BytesIO()
+                img.save(compressed_buffer, format='WEBP', quality=85, method=6)
+                compressed_buffer.seek(0)
+                
+                # Create filename with .webp extension
+                original_name = image_file.name.rsplit('.', 1)[0] if '.' in image_file.name else image_file.name
+                webp_filename = f"{original_name}.webp"
+                
+                # Create Django File object
+                from django.core.files.base import ContentFile
+                compressed_file = ContentFile(compressed_buffer.read(), name=webp_filename)
+                
+                InspectionImage.objects.create(
+                    inspection=inspection,
+                    image=compressed_file,
+                    caption=caption
+                )
+                return Response({"status": "Image uploaded and compressed"}, status=status.HTTP_201_CREATED)
+                
+        except Exception as e:
+            return Response({"error": f"Image processing failed: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=["post"])
     def send_email(self, request, pk=None):
