@@ -18,6 +18,22 @@ export default {
             },
         },
         extend: {
+            screens: {
+                'xs': '375px', // Small phones
+            },
+            spacing: {
+                'safe-top': 'env(safe-area-inset-top)',
+                'safe-bottom': 'env(safe-area-inset-bottom)',
+                'safe-left': 'env(safe-area-inset-left)',
+                'safe-right': 'env(safe-area-inset-right)',
+            },
+            minHeight: {
+                'touch': '44px', // Minimum touch target size
+                'screen-safe': 'calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))',
+            },
+            minWidth: {
+                'touch': '44px',
+            },
             colors: {
                 border: "hsl(var(--border))",
                 input: "hsl(var(--input))",

@@ -24,7 +24,7 @@ const Sidebar = () => {
     };
 
     return (
-        <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
+        <div className="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col">
             <div className="p-6 border-b border-gray-200">
                 <h1 className="text-2xl font-bold text-primary">Fit Flow</h1>
             </div>

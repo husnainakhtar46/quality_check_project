@@ -40,10 +40,10 @@ const Login = () => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-100">
-            <Card className="w-[400px]">
+        <div className="min-h-screen-safe flex items-center justify-center bg-gray-100 px-4">
+            <Card className="w-full max-w-md">
                 <CardHeader>
-                    <CardTitle>Welcome Back</CardTitle>
+                    <CardTitle className="text-xl md:text-2xl">Welcome Back</CardTitle>
                     <CardDescription>Sign in to access the Fit Flow</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -56,6 +56,7 @@ const Login = () => {
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
                                 placeholder="Enter your username"
+                                className="h-12 md:h-10"
                                 required
                             />
                         </div>
@@ -67,12 +68,13 @@ const Login = () => {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 placeholder="Enter your password"
+                                className="h-12 md:h-10"
                                 required
                             />
                         </div>
                         <Button
                             type="submit"
-                            className="w-full"
+                            className="w-full h-12 md:h-10"
                             disabled={loginMutation.isPending}
                         >
                             {loginMutation.isPending ? 'Signing in...' : 'Sign In'}

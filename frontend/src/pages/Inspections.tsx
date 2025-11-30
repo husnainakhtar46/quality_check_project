@@ -59,7 +59,7 @@ const Inspections = () => {
 
     const [page, setPage] = useState(1);
     const [listSearch, setListSearch] = useState('');
-    const [debouncedListSearch, setDebouncedListSearch] = useState('');
+    const [, setDebouncedListSearch] = useState('');
 
     // Filter state for advanced filtering
     const [filters, setFilters] = useState({
@@ -114,7 +114,7 @@ const Inspections = () => {
         queryFn: async () => {
             const params = new URLSearchParams();
             params.append('page', page.toString());
-            
+
             // Add filter parameters
             if (filters.dateFrom) params.append('created_at_after', filters.dateFrom);
             if (filters.dateTo) params.append('created_at_before', filters.dateTo);
@@ -396,10 +396,10 @@ const Inspections = () => {
                     <DialogTrigger asChild>
                         <Button><Plus className="w-4 h-4 mr-2" />New Evaluation</Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
+                    <DialogContent className="!left-0 !top-0 !right-0 !bottom-0 !translate-x-0 !translate-y-0 max-w-none !rounded-none overflow-y-auto p-0 m-0">
                         <DialogHeader><DialogTitle>Sample Evaluation</DialogTitle></DialogHeader>
 
-                        <div className="space-y-6 py-4">
+                        <div className="space-y-6 py-4 px-6 overflow-x-hidden">
                             {/* Search Bar */}
                             <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
                                 <Label className="text-blue-700 mb-2 flex items-center gap-2">
@@ -436,7 +436,7 @@ const Inspections = () => {
                             </div>
 
                             <form onSubmit={handleSubmit((data) => createMutation.mutate(data))} className="space-y-6">
-                                <div className="grid grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                     <div className="space-y-2"><Label>Style</Label><Input {...register("style", { required: true })} /></div>
                                     <div className="space-y-2"><Label>Color</Label><Input {...register("color")} /></div>
                                     <div className="space-y-2"><Label>PO Number</Label><Input {...register("po_number")} /></div>
@@ -484,7 +484,7 @@ const Inspections = () => {
                                 {/* Measurements Grid (6 Samples) */}
                                 <div className="space-y-2">
                                     <Label>Measurements</Label>
-                                    <div className="border rounded-md p-4 bg-white overflow-x-auto">
+                                    <div className="border rounded-md p-4 bg-white overflow-x-auto max-w-full">
                                         <div className="min-w-[800px] grid grid-cols-10 gap-2 mb-2 font-medium text-xs text-gray-500 uppercase text-center">
                                             <div className="col-span-2 text-left">POM</div>
                                             <div className="col-span-1">Tol</div>
@@ -536,7 +536,7 @@ const Inspections = () => {
                                 {/* QA Evaluation Section */}
                                 <div className="space-y-4 border p-4 rounded-lg bg-gray-50">
                                     <Label className="text-lg font-bold">QA Comments</Label>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="space-y-1"><Label>Fit Comments</Label><Textarea {...register("qa_fit_comments")} className="h-16 bg-white" /></div>
                                         <div className="space-y-1"><Label>Workmanship</Label><Textarea {...register("qa_workmanship_comments")} className="h-16 bg-white" /></div>
                                         <div className="space-y-1"><Label>Wash</Label><Textarea {...register("qa_wash_comments")} className="h-16 bg-white" /></div>
@@ -554,12 +554,12 @@ const Inspections = () => {
                                 {/* Images */}
                                 <div className="space-y-2">
                                     <Label>Images (Max 4)</Label>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {imageSlots.map((slot, idx) => (
                                             <div key={idx} className="border p-3 rounded-md space-y-2 bg-gray-50">
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-xs font-bold bg-white border px-2 py-1 rounded">#{idx + 1}</span>
-                                                    <Input type="file" accept="image/*" className="text-xs bg-white" onChange={(e) => handleImageChange(idx, e.target.files ? e.target.files[0] : null)} />
+                                                    <Input type="file" accept="image/*" capture="environment" className="text-xs bg-white" onChange={(e) => handleImageChange(idx, e.target.files ? e.target.files[0] : null)} />
                                                 </div>
                                                 <Input placeholder="Caption" value={slot.caption} onChange={(e) => handleCaptionChange(idx, e.target.value)} className="h-8 text-sm bg-white" />
                                             </div>
@@ -603,10 +603,6 @@ const Inspections = () => {
                 onClearAll={handleClearFilters}
             />
 
-            <div className="relative max-w-sm">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
-                <Input placeholder="Search Style, PO or User..." className="pl-8" value={listSearch} onChange={(e) => setListSearch(e.target.value)} />
-            </div>
 
             <div className="border rounded-lg bg-white">
                 <Table>
