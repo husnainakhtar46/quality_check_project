@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { FileText, Mail, Trash2, Search, Copy, Loader2, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
@@ -96,6 +96,147 @@ const Inspections = () => {
     });
 
     const { fields, replace } = useFieldArray({ control, name: "measurements" });
+
+    // --- Selection & Bulk Delete Logic ---
+    const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
+    const [isDragSelecting, setIsDragSelecting] = useState(false);
+    const [dragStart, setDragStart] = useState<{ r: number, c: number } | null>(null);
+    const columnKeys = ['std', 's1', 's2', 's3', 's4', 's5', 's6'];
+
+    const getCellId = (r: number, k: string) => `${r}-${k}`;
+
+    // Handle Delete/Backspace
+        // Handle KeyDown (Enter for Navigation, Backspace/Delete for Bulk Clear)
+    const handleCellKeyDown = (e: React.KeyboardEvent, index: number, key: string) => {
+        // Handle Enter for Navigation
+        if (e.key === 'Enter') {
+            e.preventDefault(); // Prevent form submission
+            
+            const currentColIdx = columnKeys.indexOf(key);
+            if (currentColIdx === -1) return;
+
+            // Try moving down (same column, next row)
+            const nextRowIdx = index + 1;
+            if (nextRowIdx < fields.length) {
+                const nextInput = document.querySelector(`input[name="measurements.${nextRowIdx}.${key}"]`) as HTMLInputElement;
+                if (nextInput) {
+                    nextInput.focus();
+                    nextInput.select(); // Optional: select content
+                }
+            } else {
+                // If at bottom, move to top of next column
+                const nextColIdx = currentColIdx + 1;
+                if (nextColIdx < columnKeys.length) {
+                    const nextColKey = columnKeys[nextColIdx];
+                    const nextInput = document.querySelector(`input[name="measurements.0.${nextColKey}"]`) as HTMLInputElement;
+                    if (nextInput) {
+                        nextInput.focus();
+                        nextInput.select(); // Optional: select content
+                    }
+                }
+            }
+            return;
+        }
+
+        // If Backspace/Delete is pressed
+        if (e.key === 'Backspace' || e.key === 'Delete') {
+            // If we have a selection and the current cell is part of it (or just any selection exists)
+            if (selectedCells.size > 0) {
+                // Only prevent default if we are actually clearing multiple cells or the cell is in selection
+                // But for safety to avoid navigating back, we prevent default if selection exists
+                if (selectedCells.has(getCellId(index, key)) || selectedCells.size > 0) {
+                     // If it's just a single cursor in a cell without range selection, we might want to allow normal backspace?
+                     // But the user asked for "bulk delete". 
+                     // Let's keep existing logic: if selection > 0, clear all.
+                     e.preventDefault(); 
+                    
+                    let count = 0;
+                    selectedCells.forEach(cellId => {
+                        const [rStr, k] = cellId.split('-');
+                        const r = parseInt(rStr);
+                        setValue(`measurements.${r}.${k}` as any, '');
+                        count++;
+                    });
+                    
+                    if (count > 0) {
+                        toast.success(`Cleared ${count} cells`);
+                    }
+                }
+            }
+        }
+    };
+
+    // PC: Mouse Down (Start Drag)
+    const handleCellMouseDown = (index: number, key: string) => {
+        const cIndex = columnKeys.indexOf(key);
+        if (cIndex === -1) return;
+        
+        setIsDragSelecting(true);
+        setDragStart({ r: index, c: cIndex });
+        
+        // If Ctrl is not held, start new selection
+        // For simplicity, always start new selection on drag start
+        setSelectedCells(new Set([getCellId(index, key)]));
+    };
+
+    // PC: Mouse Enter (Drag Over)
+    const handleCellMouseEnter = (index: number, key: string) => {
+        if (isDragSelecting && dragStart) {
+            const cIndex = columnKeys.indexOf(key);
+            if (cIndex === -1) return;
+
+            const rMin = Math.min(dragStart.r, index);
+            const rMax = Math.max(dragStart.r, index);
+            const cMin = Math.min(dragStart.c, cIndex);
+            const cMax = Math.max(dragStart.c, cIndex);
+
+            const newSet = new Set<string>();
+            for (let r = rMin; r <= rMax; r++) {
+                for (let c = cMin; c <= cMax; c++) {
+                    newSet.add(getCellId(r, columnKeys[c]));
+                }
+            }
+            setSelectedCells(newSet);
+        }
+    };
+
+    // Global Mouse Up (End Drag) - Attached to window/document ideally, but here we can add to container
+    useEffect(() => {
+        const handleUp = () => {
+            setIsDragSelecting(false);
+            setDragStart(null);
+        };
+        window.addEventListener('mouseup', handleUp);
+        window.addEventListener('touchend', handleUp);
+        return () => {
+            window.removeEventListener('mouseup', handleUp);
+            window.removeEventListener('touchend', handleUp);
+        };
+    }, []);
+
+    // Mobile: Long Press Logic
+    const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+    
+    const handleTouchStart = (index: number, key: string) => {
+        longPressTimer.current = setTimeout(() => {
+            // Trigger selection
+            const id = getCellId(index, key);
+            setSelectedCells(prev => {
+                const newSet = new Set(prev);
+                if (newSet.has(id)) newSet.delete(id); // Toggle if already selected
+                else newSet.add(id);
+                return newSet;
+            });
+            if (navigator.vibrate) navigator.vibrate(50); // Haptic feedback
+        }, 500); // 500ms long press
+    };
+
+    const handleTouchEnd = () => {
+        if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    };
+
+    const isSelected = (index: number, key: string) => selectedCells.has(getCellId(index, key));
+
 
     // Debounce
     useEffect(() => {
@@ -481,9 +622,10 @@ const Inspections = () => {
                                     </div>
                                 </div>
 
+                                
                                 {/* Measurements Grid (6 Samples) */}
                                 <div className="space-y-2">
-                                    <Label>Measurements</Label>
+                                    <Label>Measurements (Hold & Drag to Select Multiple • Delete/Backspace to Clear)</Label>
                                     <div className="border rounded-md p-4 bg-white overflow-x-auto max-w-full">
                                         <div className="min-w-[800px] grid grid-cols-10 gap-2 mb-2 font-medium text-xs text-gray-500 uppercase text-center">
                                             <div className="col-span-2 text-left">POM</div>
@@ -505,18 +647,40 @@ const Inspections = () => {
                                                     <div className="col-span-1"><Input {...register(`measurements.${index}.tol`)} readOnly className="bg-gray-50 h-8 text-xs text-center" /></div>
 
                                                     {/* Editable STD Field */}
-                                                    <div className="col-span-1"><Input {...register(`measurements.${index}.std`)} className="h-8 text-xs text-center bg-blue-50" placeholder="-" onPaste={handleMeasurementPaste(index, 'std')} /></div>
+                                                    <div className="col-span-1">
+                                                        <Input 
+                                                            {...register(`measurements.${index}.std`)} 
+                                                            className={`h-8 text-xs text-center ${isSelected(index, 'std') ? 'bg-blue-200 ring-2 ring-blue-500' : 'bg-blue-50'}`}
+                                                            placeholder="-" 
+                                                            onPaste={handleMeasurementPaste(index, 'std')}
+                                                            onKeyDown={(e) => handleCellKeyDown(e, index, 'std')}
+                                                            onMouseDown={() => handleCellMouseDown(index, 'std')}
+                                                            onMouseEnter={() => handleCellMouseEnter(index, 'std')}
+                                                            onTouchStart={() => handleTouchStart(index, 'std')}
+                                                            onTouchEnd={handleTouchEnd}
+                                                            autoComplete="off"
+                                                        />
+                                                    </div>
 
                                                     {[1, 2, 3, 4, 5, 6].map(num => {
-                                                        // FIX: Correctly typed dynamic key access
                                                         const key = `s${num}` as keyof Measurement;
+                                                        const selected = isSelected(index, key);
                                                         return (
                                                             <div key={num} className="col-span-1">
                                                                 <Input
                                                                     type="number" step="0.1"
                                                                     {...register(`measurements.${index}.${key}`)}
-                                                                    className={`h-8 text-center ${isRed((m as any)[key]) ? 'text-red-600 font-bold bg-red-50' : ''}`}
+                                                                    className={`h-8 text-center transition-colors 
+                                                                        ${selected ? 'bg-blue-200 ring-2 ring-blue-500 z-10 relative' : ''} 
+                                                                        ${!selected && isRed((m as any)[key]) ? 'text-red-600 font-bold bg-red-50' : ''}
+                                                                    `}
                                                                     onPaste={handleMeasurementPaste(index, key)}
+                                                                    onKeyDown={(e) => handleCellKeyDown(e, index, key)}
+                                                                    onMouseDown={() => handleCellMouseDown(index, key)}
+                                                                    onMouseEnter={() => handleCellMouseEnter(index, key)}
+                                                                    onTouchStart={() => handleTouchStart(index, key)}
+                                                                    onTouchEnd={handleTouchEnd}
+                                                                    autoComplete="off"
                                                                 />
                                                             </div>
                                                         );
@@ -526,6 +690,7 @@ const Inspections = () => {
                                         })}
                                     </div>
                                 </div>
+
 
                                 {/* Customer Remarks */}
                                 <div className="space-y-2">
