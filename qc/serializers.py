@@ -2,6 +2,7 @@
 from rest_framework import serializers
 from .models import Customer, CustomerEmail, Template, TemplatePOM, Inspection, Measurement, InspectionImage, FilterPreset
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.utils import timezone
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
@@ -113,6 +114,11 @@ class InspectionSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         measurements_data = validated_data.pop("measurements", None)
+        
+        # Update feedback date if feedback is provided
+        if 'customer_decision' in validated_data or 'customer_feedback_comments' in validated_data:
+            instance.customer_feedback_date = timezone.now()
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()

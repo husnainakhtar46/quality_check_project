@@ -376,6 +376,9 @@ class FilterPresetViewSet(viewsets.ModelViewSet):
         # Auto-assign the current user when creating a preset
         serializer.save(user=self.request.user)
 
+from django.db.models import Count
+from django.db.models.functions import TruncMonth
+
 class DashboardView(APIView):
     def get(self, request):
         total_inspections = Inspection.objects.count()
@@ -387,10 +390,30 @@ class DashboardView(APIView):
                                                .order_by("-created_at")[:5]
         recent_serializer = InspectionListSerializer(recent_inspections, many=True)
 
+        # 1. Inspections by Stage
+        inspections_by_stage = Inspection.objects.values('stage').annotate(count=Count('id')).order_by('-count')
+
+        # 2. Inspections by Customer
+        inspections_by_customer = Inspection.objects.values('customer__name').annotate(count=Count('id')).order_by('-count')
+
+        # 3. Monthly Inspection Trend
+        monthly_trend = Inspection.objects.annotate(month=TruncMonth('created_at')).values('month').annotate(count=Count('id')).order_by('month')
+
+        # 4. Customer vs Internal Decision
+        # We want to see how often they match or differ, or just counts of each
+        # Let's return counts for both to compare side-by-side or stacked
+        internal_decisions = Inspection.objects.values('decision').annotate(count=Count('id'))
+        customer_decisions = Inspection.objects.values('customer_decision').annotate(count=Count('id'))
+
         return Response({
             "total_inspections": total_inspections,
             "pass_count": pass_count,
             "fail_count": fail_count,
             "pass_rate": round(pass_rate, 1),
-            "recent_inspections": recent_serializer.data
+            "recent_inspections": recent_serializer.data,
+            "inspections_by_stage": list(inspections_by_stage),
+            "inspections_by_customer": list(inspections_by_customer),
+            "monthly_trend": list(monthly_trend),
+            "internal_decisions": list(internal_decisions),
+            "customer_decisions": list(customer_decisions),
         })
