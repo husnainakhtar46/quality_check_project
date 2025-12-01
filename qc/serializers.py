@@ -72,7 +72,8 @@ class InspectionListSerializer(serializers.ModelSerializer):
         model = Inspection
         fields = [
             "id","style","color","po_number","stage","template","customer",
-            "remarks","decision","created_at", "created_by_username"
+            "remarks","decision","created_at", "created_by_username",
+            "customer_decision", "customer_feedback_comments", "customer_feedback_date"
         ]
 
 class InspectionCopySerializer(serializers.ModelSerializer):
@@ -83,7 +84,8 @@ class InspectionCopySerializer(serializers.ModelSerializer):
             "id","style","color","po_number","stage","template","customer",
             "customer_remarks", "qa_fit_comments", "qa_workmanship_comments", 
             "qa_wash_comments", "qa_fabric_comments", "qa_accessories_comments",
-            "remarks","decision","created_at","measurements" 
+            "remarks","decision","created_at","measurements",
+            "customer_decision", "customer_feedback_comments", "customer_feedback_date"
         ]
 
 class InspectionSerializer(serializers.ModelSerializer):
@@ -98,7 +100,8 @@ class InspectionSerializer(serializers.ModelSerializer):
             "customer_remarks", "qa_fit_comments", "qa_workmanship_comments", 
             "qa_wash_comments", "qa_fabric_comments", "qa_accessories_comments",
             "remarks","decision","created_at","measurements","images",
-           "created_by_username"
+            "created_by_username",
+            "customer_decision", "customer_feedback_comments", "customer_feedback_date"
         ]
 
     def create(self, validated_data):

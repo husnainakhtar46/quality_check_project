@@ -66,6 +66,15 @@ class Inspection(models.Model):
     DECISION_CHOICES = [
         ("Accepted", "Accepted"), ("Rejected", "Rejected"), ("Represent", "Represent")
     ]
+    
+    # Customer Feedback Choices
+    CUSTOMER_DECISION_CHOICES = [
+        ("Accepted", "Accepted"),
+        ("Rejected", "Rejected"),
+        ("Revision Requested", "Revision Requested"),
+        ("Accepted with Comments", "Accepted with Comments"),
+        ("Held Internally", "Held Internally"),
+    ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     style = models.CharField(max_length=255)
@@ -85,6 +94,11 @@ class Inspection(models.Model):
 
     # General Remarks
     remarks = models.TextField(blank=True, verbose_name="General Remarks")
+    
+    # Customer Feedback Fields
+    customer_decision = models.CharField(max_length=50, choices=CUSTOMER_DECISION_CHOICES, null=True, blank=True)
+    customer_feedback_comments = models.TextField(blank=True, verbose_name="Customer Feedback Comments")
+    customer_feedback_date = models.DateTimeField(auto_now=True)
     
     decision = models.CharField(max_length=20, choices=DECISION_CHOICES, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

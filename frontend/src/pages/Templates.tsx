@@ -47,8 +47,9 @@ const Templates = () => {
     const queryClient = useQueryClient();
     const [isOpen, setIsOpen] = useState(false);
     const [editingTemplate, setEditingTemplate] = useState<any>(null);
+    const [selectedCustomer, setSelectedCustomer] = useState<string>('all');
 
-    const { register, control, handleSubmit, reset, getValues, setValue, watch } = useForm<TemplateForm>({
+    const { register, control, handleSubmit, reset, getValues, setValue } = useForm<TemplateForm>({
         defaultValues: {
             poms: [{ name: '', default_tol: 0 }],
             customer: ''
@@ -110,9 +111,13 @@ const Templates = () => {
     };
 
     const { data: templatesData, isLoading } = useQuery({
-        queryKey: ['templates'],
+        queryKey: ['templates', selectedCustomer],
         queryFn: async () => {
-            const res = await api.get('/templates/');
+            const params = new URLSearchParams();
+            if (selectedCustomer && selectedCustomer !== 'all') {
+                params.append('customer', selectedCustomer);
+            }
+            const res = await api.get(`/templates/?${params.toString()}`);
             return res.data;
         },
     });
@@ -214,8 +219,25 @@ const Templates = () => {
 
     return (
         <div className="space-y-4 md:space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Templates</h1>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="flex items-center gap-4">
+                    <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Templates</h1>
+
+                    {/* Customer Filter */}
+                    <div className="w-[200px]">
+                        <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Filter by Customer" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Customers</SelectItem>
+                                {customers?.map((c: any) => (
+                                    <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
                 <Dialog open={isOpen} onOpenChange={(open) => {
                     setIsOpen(open);
                     if (!open) {

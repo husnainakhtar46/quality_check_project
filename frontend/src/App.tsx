@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import Templates from './pages/Templates';
 import Inspections from './pages/Inspections';
 import Customers from './pages/Customers';
+import CustomerFeedback from './pages/CustomerFeedback';
 import Sidebar from './components/Sidebar';
 import MobileNav from './components/MobileNav';
 import MobileHeader from './components/MobileHeader';
@@ -59,6 +60,7 @@ function App() {
                         <Route path="/dashboard" element={<Dashboard />} />
                         <Route path="/templates" element={<Templates />} />
                         <Route path="/inspections" element={<Inspections />} />
+                        <Route path="/customer-feedback" element={<CustomerFeedback />} />
                         <Route path="/customers" element={<Customers />} />
                     </Route>
                 </Routes>

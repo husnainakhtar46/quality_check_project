@@ -531,14 +531,14 @@ const Inspections = () => {
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-                <h1 className="text-3xl font-bold text-gray-900">Sample Evaluation</h1>
+                <h1 className="text-3xl font-bold text-gray-900">Evaluation</h1>
 
                 <Dialog open={isOpen} onOpenChange={setIsOpen}>
                     <DialogTrigger asChild>
                         <Button><Plus className="w-4 h-4 mr-2" />New Evaluation</Button>
                     </DialogTrigger>
                     <DialogContent className="!left-0 !top-0 !right-0 !bottom-0 !translate-x-0 !translate-y-0 max-w-none !rounded-none overflow-y-auto p-0 m-0">
-                        <DialogHeader><DialogTitle>Sample Evaluation</DialogTitle></DialogHeader>
+                        <DialogHeader><DialogTitle>Evaluation</DialogTitle></DialogHeader>
 
                         <div className="space-y-6 py-4 px-6 overflow-x-hidden">
                             {/* Search Bar */}
