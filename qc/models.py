@@ -462,7 +462,7 @@ class FinalInspectionImage(models.Model):
         ('Measurement', 'Measurement'),
         ('On-Site Test', 'On-Site Test'),
     ]
-    
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     final_inspection = models.ForeignKey(FinalInspection, related_name='images', on_delete=models.CASCADE)
     image = models.ImageField(upload_to='final_inspection_images/')
@@ -476,3 +476,22 @@ class FinalInspectionImage(models.Model):
     
     class Meta:
         ordering = ['order', 'uploaded_at']
+
+
+class FinalInspectionMeasurement(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    final_inspection = models.ForeignKey(FinalInspection, related_name='measurements', on_delete=models.CASCADE)
+    pom = models.CharField(max_length=255)
+    tolerance = models.FloatField(default=0.0)
+    standard = models.FloatField(default=0.0) # User editable standard
+    s1 = models.CharField(max_length=50, blank=True)
+    s2 = models.CharField(max_length=50, blank=True)
+    s3 = models.CharField(max_length=50, blank=True)
+    s4 = models.CharField(max_length=50, blank=True)
+    s5 = models.CharField(max_length=50, blank=True)
+
+    def __str__(self):
+        return f"{self.pom} - {self.final_inspection.order_no}"
+
+    class Meta:
+        ordering = ['id']

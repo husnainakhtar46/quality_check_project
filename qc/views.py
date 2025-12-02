@@ -367,57 +367,63 @@ def generate_final_inspection_pdf(final_inspection):
         p.drawString(200, y_pos, row[1])
         y_pos -= 15
         
-    # ==================== PAGE 2: MEASUREMENTS ====================
+    # ==================== PAGE 2: MEASUREMENTS (Updated Layout) ====================
     p.showPage()
     y_pos = height - 50
     p.setFont("Helvetica-Bold", 16)
-    p.drawString(50, y_pos, "4. Measurement Chart (Size Check)")
+    p.drawString(50, y_pos, "4. Measurement Data")
     y_pos -= 30
     
-    if final_inspection.size_checks.exists():
-        # Draw table header
-        headers = ["Size", "Order Qty", "Packed Qty", "Diff", "Dev %"]
-        col_widths = [80, 80, 80, 80, 80]
-        curr_x = 50
+    if final_inspection.measurements.exists():
+        # Header: POM | Tol | Std | S1 | S2 | S3 | S4 | S5
+        headers = ["POM", "Tol (+/-)", "Standard", "S1", "S2", "S3", "S4", "S5"]
+        col_widths = [150, 60, 60, 45, 45, 45, 45, 45]
         
-        p.setFont("Helvetica-Bold", 10)
+        p.setFont("Helvetica-Bold", 9)
         p.setFillColorRGB(0.9, 0.9, 0.9)
-        p.rect(50, y_pos - 20, 400, 20, fill=1)
+        p.rect(50, y_pos - 20, sum(col_widths), 20, fill=1)
         p.setFillColorRGB(0, 0, 0)
         
+        curr_x = 50
         for i, h in enumerate(headers):
-            p.drawString(curr_x + 5, y_pos - 15, h)
+            p.drawString(curr_x + 5, y_pos - 14, h)
             curr_x += col_widths[i]
         y_pos -= 20
         
-        p.setFont("Helvetica", 10)
-        for check in final_inspection.size_checks.all():
-            vals = [
-                check.size, 
-                str(check.order_qty), 
-                str(check.packed_qty), 
-                str(check.difference), 
-                f"{check.deviation_percent}%"
-            ]
-            
+        p.setFont("Helvetica", 9)
+        for m in final_inspection.measurements.all():
+            vals = [m.pom, str(m.tolerance), str(m.standard), m.s1, m.s2, m.s3, m.s4, m.s5]
             curr_x = 50
+            max_height = 20
+            
             for i, v in enumerate(vals):
                 p.rect(curr_x, y_pos - 20, col_widths[i], 20)
                 
-                # Highlight deviation > 5% (example logic)
-                if i == 4 and abs(check.deviation_percent) > 5:
-                    p.setFillColorRGB(1, 0, 0)
+                # Highlight out of tolerance
+                is_fail = False
+                if i > 2 and v: # Check S1-S5
+                    try:
+                        val_float = float(v)
+                        if abs(val_float - m.standard) > m.tolerance:
+                            is_fail = True
+                    except:
+                        pass
                 
-                p.drawString(curr_x + 5, y_pos - 15, v)
-                p.setFillColorRGB(0, 0, 0)
+                if is_fail:
+                    p.setFillColorRGB(1, 0, 0) # Red text
+                    p.setFont("Helvetica-Bold", 9)
+                else:
+                    p.setFillColorRGB(0, 0, 0)
+                    p.setFont("Helvetica", 9)
+                    
+                p.drawString(curr_x + 5, y_pos - 14, str(v))
                 curr_x += col_widths[i]
             
             y_pos -= 20
             y_pos = check_page_break(y_pos)
+            
     else:
-        p.setFont("Helvetica-Oblique", 10)
-        p.drawString(50, y_pos, "No measurement data recorded.")
-        y_pos -= 20
+        p.drawString(50, y_pos, "No measurements recorded.")
 
     # ==================== PAGE 3: DEFECTS ====================
     p.showPage()
@@ -462,68 +468,76 @@ def generate_final_inspection_pdf(final_inspection):
     else:
         p.drawString(50, y_pos, "No defects recorded.")
 
-    # ==================== PAGE 4+: PHOTO APPENDIX ====================
+    # ==================== PAGE 4: PHOTO APPENDIX ====================
     p.showPage()
     y_pos = height - 50
     p.setFont("Helvetica-Bold", 16)
     p.drawString(50, y_pos, "6. Photo Appendix")
     y_pos -= 30
-    
+
     categories = ['Packaging', 'Labeling', 'Defect', 'General', 'Measurement', 'On-Site Test']
     
     for category in categories:
         cat_images = final_inspection.images.filter(category=category)
         if not cat_images.exists():
             continue
-            
-        y_pos = check_page_break(y_pos, 100)
+        
+        # Check if we have enough space for Header + 1 Row of images (approx 250px)
+        if y_pos < 250:
+            p.showPage()
+            y_pos = height - 50
+
+        # Section Header
         p.setFont("Helvetica-Bold", 14)
-        p.drawString(50, y_pos, f"Category: {category}")
+        p.setFillColorRGB(0, 0, 0.5) # Dark Blue header
+        p.drawString(50, y_pos, category)
         p.line(50, y_pos - 5, 550, y_pos - 5)
+        p.setFillColorRGB(0, 0, 0)
         y_pos -= 30
         
-        # Grid layout (2 columns)
-        x_positions = [50, 310]
-        current_col = 0
-        
-        for img_obj in cat_images:
-            if y_pos < 220:
+        # Grid Layout
+        row_y = y_pos
+        for i, img_obj in enumerate(cat_images):
+            # Start a new page if needed
+            if row_y < 220: 
                 p.showPage()
                 y_pos = height - 50
-                current_col = 0
+                row_y = y_pos
             
-            x = x_positions[current_col]
+            # Left col (0, 2, 4...) or Right col (1, 3, 5...)
+            is_right = i % 2 != 0
+            x = 310 if is_right else 50
             
             try:
+                # Image Processing
                 with PILImage.open(img_obj.image.path) as pil_img:
-                    if pil_img.mode in ("RGBA", "P"): pil_img = pil_img.convert("RGB")
+                    if pil_img.mode != "RGB": pil_img = pil_img.convert("RGB")
                     pil_img.thumbnail((600, 600))
                     img_buffer = io.BytesIO()
-                    pil_img.save(img_buffer, format='JPEG', quality=80)
+                    pil_img.save(img_buffer, format='JPEG')
                     img_buffer.seek(0)
-                    reportlab_img = ImageReader(img_buffer)
                     
                     # Draw Image
-                    p.drawImage(reportlab_img, x, y_pos - 200, width=240, height=180, preserveAspectRatio=True)
-                    p.rect(x, y_pos - 200, 240, 180) # Border
+                    p.drawImage(ImageReader(img_buffer), x, row_y - 180, width=240, height=180, preserveAspectRatio=True)
+                    p.rect(x, row_y - 180, 240, 180)
                     
                     # Caption
+                    caption = img_obj.caption or "No Caption"
                     p.setFont("Helvetica", 9)
-                    caption = img_obj.caption or "No caption"
-                    p.drawString(x, y_pos - 215, caption[:40])
-                    
-            except Exception as e:
-                p.drawString(x, y_pos - 100, "Image Error")
-            
-            if current_col == 1:
-                y_pos -= 240
-                current_col = 0
-            else:
-                current_col = 1
+                    p.drawCentredString(x + 120, row_y - 195, caption[:50])
+            except:
+                p.drawString(x, row_y - 100, "Image Missing")
+
+            # If we just filled the right column, move down for the next row
+            if is_right:
+                row_y -= 230
         
-        # Reset for next category if we ended on col 1
-        if current_col == 1:
-            y_pos -= 240
+        # After finishing a category, set y_pos to where the last row ended
+        # If we ended on a left image, we still need to move down
+        if len(cat_images) % 2 != 0:
+            row_y -= 230
+            
+        y_pos = row_y # Update main cursor
 
     p.save()
     buffer.seek(0)
@@ -730,7 +744,7 @@ class DashboardView(APIView):
 
 # ==================== Final Inspection ViewSet ====================
 
-from .models import FinalInspection, FinalInspectionDefect, FinalInspectionSizeCheck, FinalInspectionImage, calculate_sample_size
+from .models import FinalInspection, FinalInspectionDefect, FinalInspectionSizeCheck, FinalInspectionImage, calculate_sample_size, get_aql_limits
 from .serializers import FinalInspectionSerializer, FinalInspectionListSerializer, FinalInspectionImageSerializer
 
 
@@ -840,21 +854,57 @@ class FinalInspectionViewSet(viewsets.ModelViewSet):
             return Response({'error': f'Image processing failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=False, methods=['post'])
-    def calculate_sample(self, request):
-        """Calculate sample size based on presented quantity."""
-        presented_qty = request.data.get('presented_qty')
-        if not presented_qty:
-            return Response({'error': 'presented_qty is required'}, status=status.HTTP_400_BAD_REQUEST)
-        
+    def calculate_aql(self, request):
+        """
+        Centralized Calculation Endpoint.
+        Input: { "qty": 2000, "standard": "standard", "critical": 0, "major": 5, "minor": 8 }
+        Output: { "sample_size": 125, "limits": { ... }, "result": "Pass/Fail" }
+        """
         try:
-            presented_qty = int(presented_qty)
-            sample_size = calculate_sample_size(presented_qty)
+            # 1. Get Inputs
+            qty = int(request.data.get('qty', 0))
+            standard = request.data.get('standard', 'standard')
+            
+            # defect counts (optional, for checking result)
+            critical_found = int(request.data.get('critical', 0))
+            major_found = int(request.data.get('major', 0))
+            minor_found = int(request.data.get('minor', 0))
+
+            # 2. Calculate Sample Size
+            sample_size = calculate_sample_size(qty)
+
+            # 3. Determine AQL Levels
+            if standard == 'strict':
+                aql_critical, aql_major, aql_minor = 0.0, 1.5, 2.5
+            else:
+                aql_critical, aql_major, aql_minor = 0.0, 2.5, 4.0
+
+            # 4. Get Allowed Limits
+            max_critical = get_aql_limits(sample_size, aql_critical)
+            max_major = get_aql_limits(sample_size, aql_major)
+            max_minor = get_aql_limits(sample_size, aql_minor)
+
+            # 5. Determine Result
+            result = "Pass"
+            if (critical_found > max_critical or 
+                major_found > max_major or 
+                minor_found > max_minor):
+                result = "Fail"
+
             return Response({
-                'presented_qty': presented_qty,
-                'sample_size': sample_size
+                "sample_size": sample_size,
+                "limits": {
+                    "critical": max_critical,
+                    "major": max_major,
+                    "minor": max_minor
+                },
+                "result": result,
+                "standard_used": standard
             })
-        except (ValueError, TypeError):
-            return Response({'error': 'Invalid presented_qty value'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
             
     @action(detail=True, methods=['get'])
     def pdf(self, request, pk=None):

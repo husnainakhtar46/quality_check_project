@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Plus, Minus, Trash2, Upload, AlertCircle } from 'lucide-react';
 import { useToast } from './ui/use-toast';
-import { calculateSampleSize, getAQLLimits, COMMON_DEFECTS, AQL_STANDARDS } from '../lib/aqlCalculations';
+import { COMMON_DEFECTS } from '../lib/aqlCalculations';
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:8000';
 
@@ -159,12 +159,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
   // --- Effects ---
 
   // 1. Auto-calculate sample size based on PRESENTED QTY
-  useEffect(() => {
-    if (presentedQty && !inspectionId) {
-      const calculatedSize = calculateSampleSize(presentedQty);
-      setValue('sample_size', calculatedSize);
-    }
-  }, [presentedQty, setValue, inspectionId]);
+  // Removed client-side calculation effect as it's now handled by performCalculation
 
   // 2. Populate Measurement Chart when Template is selected
   useEffect(() => {
@@ -194,19 +189,61 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
     return { critical, major, minor };
   };
 
-  const totals = getTotalDefects();
-  const currentStandard = AQL_STANDARDS[aqlStandard] || AQL_STANDARDS.standard;
+  const { critical, major, minor } = getTotalDefects();
 
-  const maxCritical = getAQLLimits(sampleSize || 0, currentStandard.critical);
-  const maxMajor = getAQLLimits(sampleSize || 0, currentStandard.major);
-  const maxMinor = getAQLLimits(sampleSize || 0, currentStandard.minor);
+  // State for Server-Side Calculations
+  const [serverCalcs, setServerCalcs] = useState({
+    sampleSize: 0,
+    maxCritical: 0,
+    maxMajor: 0,
+    maxMinor: 0,
+    result: 'Pending'
+  });
 
-  const getResultStatus = (): 'Pass' | 'Fail' => {
-    if (totals.critical > maxCritical || totals.major > maxMajor || totals.minor > maxMinor) {
-      return 'Fail';
+  // --- API Calculation Hook ---
+  const performCalculation = useCallback(async () => {
+    if (!presentedQty) return;
+
+    try {
+      const response = await axios.post(
+        `${API_URL}/final-inspections/calculate_aql/`,
+        {
+          qty: presentedQty,
+          standard: aqlStandard,
+          critical: critical,
+          major: major,
+          minor: minor
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const data = response.data;
+
+      // Update Local State with Server Data
+      setServerCalcs({
+        sampleSize: data.sample_size,
+        maxCritical: data.limits.critical,
+        maxMajor: data.limits.major,
+        maxMinor: data.limits.minor,
+        result: data.result
+      });
+
+      // Update Form Field
+      setValue('sample_size', data.sample_size);
+
+    } catch (error) {
+      console.error("Calculation failed", error);
     }
-    return 'Pass';
-  };
+  }, [presentedQty, aqlStandard, critical, major, minor, token, setValue]);
+
+  // --- Trigger Calculation ---
+  // Debounce to avoid spamming server while typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      performCalculation();
+    }, 500); // Wait 500ms after typing stops
+    return () => clearTimeout(timer);
+  }, [performCalculation]);
 
   // Helper to check tolerance
   const isOutOfTolerance = (value: string, spec: number, tol: number) => {
@@ -378,46 +415,49 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
       {/* Section 2: AQL Status */}
       <Card className="border-t-4 border-t-blue-600">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle>2. Live AQL Result</CardTitle>
-          <Badge className={getResultStatus() === 'Pass' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'} style={{ fontSize: '1.2rem', padding: '0.5rem 1.5rem' }}>
-            {getResultStatus().toUpperCase()}
+          <CardTitle>2. AQL Result (Server Verified)</CardTitle>
+          <Badge
+            className={serverCalcs.result === 'Pass' ? 'bg-green-600' : 'bg-red-600'}
+            style={{ fontSize: '1.2rem', padding: '0.5rem 1.5rem' }}
+          >
+            {serverCalcs.result.toUpperCase()}
           </Badge>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Critical Card */}
-            <div className={`p-4 rounded-lg border-2 transition-all ${totals.critical > maxCritical ? 'border-red-500 bg-red-50' : 'border-gray-200'}`}>
+            <div className={`p-4 rounded-lg border-2 transition-all ${critical > serverCalcs.maxCritical ? 'border-red-500 bg-red-50' : 'border-gray-200'}`}>
               <div className="flex justify-between mb-2">
-                <span className="font-semibold text-gray-700">Critical (0.0)</span>
-                <span className="text-xs font-mono bg-gray-200 px-2 py-1 rounded">Max: {maxCritical}</span>
+                <span className="font-semibold text-gray-700">Critical</span>
+                <span className="text-xs font-mono bg-gray-200 px-2 py-1 rounded">Max: {serverCalcs.maxCritical}</span>
               </div>
-              <div className="text-4xl font-bold text-gray-900">{totals.critical}</div>
-              <p className={`text-xs mt-1 font-bold ${totals.critical > maxCritical ? 'text-red-600' : 'text-green-600'}`}>
-                {totals.critical > maxCritical ? 'FAILED' : 'WITHIN LIMIT'}
+              <div className="text-4xl font-bold text-gray-900">{critical}</div>
+              <p className={`text-xs mt-1 font-bold ${critical > serverCalcs.maxCritical ? 'text-red-600' : 'text-green-600'}`}>
+                {critical > serverCalcs.maxCritical ? 'FAILED' : 'WITHIN LIMIT'}
               </p>
             </div>
 
             {/* Major Card */}
-            <div className={`p-4 rounded-lg border-2 transition-all ${totals.major > maxMajor ? 'border-red-500 bg-red-50' : 'border-gray-200'}`}>
+            <div className={`p-4 rounded-lg border-2 transition-all ${major > serverCalcs.maxMajor ? 'border-red-500 bg-red-50' : 'border-gray-200'}`}>
               <div className="flex justify-between mb-2">
-                <span className="font-semibold text-gray-700">Major ({currentStandard.major})</span>
-                <span className="text-xs font-mono bg-gray-200 px-2 py-1 rounded">Max: {maxMajor}</span>
+                <span className="font-semibold text-gray-700">Major</span>
+                <span className="text-xs font-mono bg-gray-200 px-2 py-1 rounded">Max: {serverCalcs.maxMajor}</span>
               </div>
-              <div className="text-4xl font-bold text-gray-900">{totals.major}</div>
-              <p className={`text-xs mt-1 font-bold ${totals.major > maxMajor ? 'text-red-600' : 'text-green-600'}`}>
-                {totals.major > maxMajor ? 'FAILED' : 'WITHIN LIMIT'}
+              <div className="text-4xl font-bold text-gray-900">{major}</div>
+              <p className={`text-xs mt-1 font-bold ${major > serverCalcs.maxMajor ? 'text-red-600' : 'text-green-600'}`}>
+                {major > serverCalcs.maxMajor ? 'FAILED' : 'WITHIN LIMIT'}
               </p>
             </div>
 
             {/* Minor Card */}
-            <div className={`p-4 rounded-lg border-2 transition-all ${totals.minor > maxMinor ? 'border-red-500 bg-red-50' : 'border-gray-200'}`}>
+            <div className={`p-4 rounded-lg border-2 transition-all ${minor > serverCalcs.maxMinor ? 'border-red-500 bg-red-50' : 'border-gray-200'}`}>
               <div className="flex justify-between mb-2">
-                <span className="font-semibold text-gray-700">Minor ({currentStandard.minor})</span>
-                <span className="text-xs font-mono bg-gray-200 px-2 py-1 rounded">Max: {maxMinor}</span>
+                <span className="font-semibold text-gray-700">Minor</span>
+                <span className="text-xs font-mono bg-gray-200 px-2 py-1 rounded">Max: {serverCalcs.maxMinor}</span>
               </div>
-              <div className="text-4xl font-bold text-gray-900">{totals.minor}</div>
-              <p className={`text-xs mt-1 font-bold ${totals.minor > maxMinor ? 'text-red-600' : 'text-green-600'}`}>
-                {totals.minor > maxMinor ? 'FAILED' : 'WITHIN LIMIT'}
+              <div className="text-4xl font-bold text-gray-900">{minor}</div>
+              <p className={`text-xs mt-1 font-bold ${minor > serverCalcs.maxMinor ? 'text-red-600' : 'text-green-600'}`}>
+                {minor > serverCalcs.maxMinor ? 'FAILED' : 'WITHIN LIMIT'}
               </p>
             </div>
           </div>

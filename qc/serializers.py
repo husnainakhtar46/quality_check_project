@@ -2,7 +2,8 @@
 from rest_framework import serializers
 from .models import (
     Customer, CustomerEmail, Template, TemplatePOM, Inspection, Measurement, InspectionImage, FilterPreset,
-    FinalInspection, FinalInspectionDefect, FinalInspectionSizeCheck, FinalInspectionImage
+    FinalInspection, FinalInspectionDefect, FinalInspectionSizeCheck, FinalInspectionImage,
+    FinalInspectionMeasurement
 )
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.utils import timezone
@@ -138,6 +139,10 @@ class FilterPresetSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 # ==================== Final Inspection Serializers ====================
+class FinalInspectionMeasurementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FinalInspectionMeasurement
+        fields = ['id', 'pom', 'tolerance', 'standard', 's1', 's2', 's3', 's4', 's5']
 
 class FinalInspectionDefectSerializer(serializers.ModelSerializer):
     class Meta:
@@ -178,6 +183,7 @@ class FinalInspectionSerializer(serializers.ModelSerializer):
     """Full serializer with nested relationships."""
     defects = FinalInspectionDefectSerializer(many=True, required=False)
     size_checks = FinalInspectionSizeCheckSerializer(many=True, required=False)
+    measurements = FinalInspectionMeasurementSerializer(many=True, required=False)
     images = FinalInspectionImageSerializer(many=True, read_only=True)
     created_by_username = serializers.CharField(source='created_by.username', read_only=True)
     customer_name = serializers.CharField(source='customer.name', read_only=True)
@@ -203,13 +209,14 @@ class FinalInspectionSerializer(serializers.ModelSerializer):
             'quantity_check', 'workmanship', 'packing_method',
             'marking_label', 'data_measurement', 'hand_feel',
             'remarks', 'created_at', 'created_by', 'created_by_username',
-            'defects', 'size_checks', 'images'
+            'defects', 'size_checks', 'images', 'measurements'
         ]
     
     def create(self, validated_data):
         """Create FinalInspection with nested defects and size_checks."""
         defects_data = validated_data.pop('defects', [])
         size_checks_data = validated_data.pop('size_checks', [])
+        measurements_data = validated_data.pop('measurements', [])
         
         # Create the main inspection
         final_inspection = FinalInspection.objects.create(**validated_data)
@@ -227,6 +234,13 @@ class FinalInspectionSerializer(serializers.ModelSerializer):
                 final_inspection=final_inspection,
                 **size_check_data
             )
+
+        # Create nested measurements
+        for measurement_data in measurements_data:
+            FinalInspectionMeasurement.objects.create(
+                final_inspection=final_inspection,
+                **measurement_data
+            )
         
         return final_inspection
     
@@ -234,6 +248,7 @@ class FinalInspectionSerializer(serializers.ModelSerializer):
         """Update FinalInspection with nested defects and size_checks."""
         defects_data = validated_data.pop('defects', None)
         size_checks_data = validated_data.pop('size_checks', None)
+        measurements_data = validated_data.pop('measurements', None)
         
         # Update main fields
         for attr, value in validated_data.items():
@@ -256,6 +271,15 @@ class FinalInspectionSerializer(serializers.ModelSerializer):
                 FinalInspectionSizeCheck.objects.create(
                     final_inspection=instance,
                     **size_check_data
+                )
+
+        # Update measurements if provided
+        if measurements_data is not None:
+            instance.measurements.all().delete()
+            for measurement_data in measurements_data:
+                FinalInspectionMeasurement.objects.create(
+                    final_inspection=instance,
+                    **measurement_data
                 )
         
         return instance
