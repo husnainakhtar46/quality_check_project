@@ -218,6 +218,316 @@ def generate_pdf_buffer(inspection):
     buffer.seek(0)
     return buffer
 
+
+
+def generate_final_inspection_pdf(final_inspection):
+    """
+    Generate a professional PDF report for Final Inspection (Softwood/Intertek Style).
+    
+    Page 1: Executive Summary, AQL Result, Carton Quantities
+    Page 2: Measurement Chart (New)
+    Page 3: Defect Breakdown
+    Page 4+: Photo Appendix (Categorized)
+    """
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter, A4
+    from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph, 
+                                     Spacer, Image as RLImage, PageBreak)
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    import textwrap
+    
+    buffer = io.BytesIO()
+    width, height = A4  # Use A4 for professional reports
+    
+    # Create canvas
+    p = canvas.Canvas(buffer, pagesize=A4)
+    y_pos = height - 50
+    
+    # Helper to check page break
+    def check_page_break(y, required_space=50):
+        if y < required_space:
+            p.showPage()
+            return height - 50
+        return y
+
+    # ==================== PAGE 1: EXECUTIVE SUMMARY ====================
+    
+    # Header
+    p.setFont("Helvetica-Bold", 22)
+    p.drawString(50, y_pos, "FINAL INSPECTION REPORT")
+    
+    # Result Badge (Top Right)
+    result = final_inspection.result
+    p.setFont("Helvetica-Bold", 18)
+    if result == 'Pass':
+        p.setFillColorRGB(0, 0.6, 0)  # Green
+        badge_text = "PASS"
+    elif result == 'Fail':
+        p.setFillColorRGB(1, 0, 0)  # Red
+        badge_text = "FAIL"
+    else:
+        p.setFillColorRGB(0.5, 0.5, 0.5)  # Gray
+        badge_text = "PENDING"
+    
+    p.drawRightString(550, y_pos, f"RESULT: {badge_text}")
+    p.setFillColorRGB(0, 0, 0)  # Reset
+    y_pos -= 40
+    
+    # General Info Table
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(50, y_pos, "1. General Information")
+    y_pos -= 20
+    
+    data = [
+        ["Customer:", final_inspection.customer.name if final_inspection.customer else 'N/A', "Inspection Date:", final_inspection.inspection_date.strftime('%d-%b-%Y')],
+        ["Supplier:", final_inspection.supplier, "Order No:", final_inspection.order_no],
+        ["Factory:", final_inspection.factory, "Style No:", final_inspection.style_no],
+        ["Color:", final_inspection.color, "AQL Standard:", final_inspection.get_aql_standard_display() if hasattr(final_inspection, 'get_aql_standard_display') else final_inspection.aql_standard],
+    ]
+    
+    # Draw simple grid for info
+    row_height = 20
+    col_widths = [80, 180, 90, 150]
+    x_start = 50
+    
+    p.setFont("Helvetica", 10)
+    for row in data:
+        curr_x = x_start
+        for i, cell in enumerate(row):
+            p.rect(curr_x, y_pos - row_height + 5, col_widths[i], row_height, stroke=1, fill=0)
+            p.drawString(curr_x + 5, y_pos - 10, str(cell))
+            curr_x += col_widths[i]
+        y_pos -= row_height
+    
+    y_pos -= 20
+    
+    # AQL Result Table
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(50, y_pos, "2. AQL Result Summary")
+    y_pos -= 20
+    
+    # Header
+    headers = ["Sample Size", "Critical (0)", f"Major ({final_inspection.aql_major})", f"Minor ({final_inspection.aql_minor})", "Result"]
+    col_widths = [100, 100, 100, 100, 100]
+    curr_x = 50
+    
+    p.setFillColorRGB(0.9, 0.9, 0.9) # Header bg
+    p.rect(50, y_pos - 20, 500, 20, fill=1)
+    p.setFillColorRGB(0, 0, 0)
+    
+    for i, h in enumerate(headers):
+        p.drawString(curr_x + 5, y_pos - 15, h)
+        curr_x += col_widths[i]
+    y_pos -= 20
+    
+    # Values
+    values = [
+        str(final_inspection.sample_size),
+        f"{final_inspection.critical_found} / {final_inspection.max_allowed_critical}",
+        f"{final_inspection.major_found} / {final_inspection.max_allowed_major}",
+        f"{final_inspection.minor_found} / {final_inspection.max_allowed_minor}",
+        badge_text
+    ]
+    
+    curr_x = 50
+    for i, v in enumerate(values):
+        p.rect(curr_x, y_pos - 20, col_widths[i], 20)
+        
+        # Color code the result cell
+        if i == 4:
+            if v == "PASS": p.setFillColorRGB(0, 0.6, 0)
+            elif v == "FAIL": p.setFillColorRGB(1, 0, 0)
+            p.setFont("Helvetica-Bold", 10)
+        
+        p.drawString(curr_x + 5, y_pos - 15, v)
+        p.setFillColorRGB(0, 0, 0)
+        p.setFont("Helvetica", 10)
+        curr_x += col_widths[i]
+        
+    y_pos -= 40
+    
+    # Quantities Table
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(50, y_pos, "3. Shipment Quantities")
+    y_pos -= 20
+    
+    qty_data = [
+        ["Total Order Qty:", str(final_inspection.total_order_qty)],
+        ["Presented Qty:", str(final_inspection.presented_qty)],
+        ["Total Cartons:", str(final_inspection.total_cartons)],
+        ["Selected Cartons:", str(final_inspection.selected_cartons)],
+        ["Net Weight (kg):", str(final_inspection.net_weight)],
+        ["Gross Weight (kg):", str(final_inspection.gross_weight)],
+    ]
+    
+    for row in qty_data:
+        p.drawString(50, y_pos, row[0])
+        p.drawString(200, y_pos, row[1])
+        y_pos -= 15
+        
+    # ==================== PAGE 2: MEASUREMENTS ====================
+    p.showPage()
+    y_pos = height - 50
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(50, y_pos, "4. Measurement Chart (Size Check)")
+    y_pos -= 30
+    
+    if final_inspection.size_checks.exists():
+        # Draw table header
+        headers = ["Size", "Order Qty", "Packed Qty", "Diff", "Dev %"]
+        col_widths = [80, 80, 80, 80, 80]
+        curr_x = 50
+        
+        p.setFont("Helvetica-Bold", 10)
+        p.setFillColorRGB(0.9, 0.9, 0.9)
+        p.rect(50, y_pos - 20, 400, 20, fill=1)
+        p.setFillColorRGB(0, 0, 0)
+        
+        for i, h in enumerate(headers):
+            p.drawString(curr_x + 5, y_pos - 15, h)
+            curr_x += col_widths[i]
+        y_pos -= 20
+        
+        p.setFont("Helvetica", 10)
+        for check in final_inspection.size_checks.all():
+            vals = [
+                check.size, 
+                str(check.order_qty), 
+                str(check.packed_qty), 
+                str(check.difference), 
+                f"{check.deviation_percent}%"
+            ]
+            
+            curr_x = 50
+            for i, v in enumerate(vals):
+                p.rect(curr_x, y_pos - 20, col_widths[i], 20)
+                
+                # Highlight deviation > 5% (example logic)
+                if i == 4 and abs(check.deviation_percent) > 5:
+                    p.setFillColorRGB(1, 0, 0)
+                
+                p.drawString(curr_x + 5, y_pos - 15, v)
+                p.setFillColorRGB(0, 0, 0)
+                curr_x += col_widths[i]
+            
+            y_pos -= 20
+            y_pos = check_page_break(y_pos)
+    else:
+        p.setFont("Helvetica-Oblique", 10)
+        p.drawString(50, y_pos, "No measurement data recorded.")
+        y_pos -= 20
+
+    # ==================== PAGE 3: DEFECTS ====================
+    p.showPage()
+    y_pos = height - 50
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(50, y_pos, "5. Defect Breakdown")
+    y_pos -= 30
+    
+    if final_inspection.defects.exists():
+        headers = ["Description", "Severity", "Count"]
+        col_widths = [250, 100, 80]
+        
+        p.setFont("Helvetica-Bold", 10)
+        p.setFillColorRGB(0.9, 0.9, 0.9)
+        p.rect(50, y_pos - 20, 430, 20, fill=1)
+        p.setFillColorRGB(0, 0, 0)
+        
+        curr_x = 50
+        for i, h in enumerate(headers):
+            p.drawString(curr_x + 5, y_pos - 15, h)
+            curr_x += col_widths[i]
+        y_pos -= 20
+        
+        p.setFont("Helvetica", 10)
+        for defect in final_inspection.defects.all():
+            vals = [defect.description, defect.severity, str(defect.count)]
+            curr_x = 50
+            
+            for i, v in enumerate(vals):
+                p.rect(curr_x, y_pos - 20, col_widths[i], 20)
+                
+                if i == 1: # Severity color
+                    if v == 'Critical': p.setFillColorRGB(1, 0, 0)
+                    elif v == 'Major': p.setFillColorRGB(1, 0.5, 0)
+                
+                p.drawString(curr_x + 5, y_pos - 15, v)
+                p.setFillColorRGB(0, 0, 0)
+                curr_x += col_widths[i]
+            
+            y_pos -= 20
+            y_pos = check_page_break(y_pos)
+    else:
+        p.drawString(50, y_pos, "No defects recorded.")
+
+    # ==================== PAGE 4+: PHOTO APPENDIX ====================
+    p.showPage()
+    y_pos = height - 50
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(50, y_pos, "6. Photo Appendix")
+    y_pos -= 30
+    
+    categories = ['Packaging', 'Labeling', 'Defect', 'General', 'Measurement', 'On-Site Test']
+    
+    for category in categories:
+        cat_images = final_inspection.images.filter(category=category)
+        if not cat_images.exists():
+            continue
+            
+        y_pos = check_page_break(y_pos, 100)
+        p.setFont("Helvetica-Bold", 14)
+        p.drawString(50, y_pos, f"Category: {category}")
+        p.line(50, y_pos - 5, 550, y_pos - 5)
+        y_pos -= 30
+        
+        # Grid layout (2 columns)
+        x_positions = [50, 310]
+        current_col = 0
+        
+        for img_obj in cat_images:
+            if y_pos < 220:
+                p.showPage()
+                y_pos = height - 50
+                current_col = 0
+            
+            x = x_positions[current_col]
+            
+            try:
+                with PILImage.open(img_obj.image.path) as pil_img:
+                    if pil_img.mode in ("RGBA", "P"): pil_img = pil_img.convert("RGB")
+                    pil_img.thumbnail((600, 600))
+                    img_buffer = io.BytesIO()
+                    pil_img.save(img_buffer, format='JPEG', quality=80)
+                    img_buffer.seek(0)
+                    reportlab_img = ImageReader(img_buffer)
+                    
+                    # Draw Image
+                    p.drawImage(reportlab_img, x, y_pos - 200, width=240, height=180, preserveAspectRatio=True)
+                    p.rect(x, y_pos - 200, 240, 180) # Border
+                    
+                    # Caption
+                    p.setFont("Helvetica", 9)
+                    caption = img_obj.caption or "No caption"
+                    p.drawString(x, y_pos - 215, caption[:40])
+                    
+            except Exception as e:
+                p.drawString(x, y_pos - 100, "Image Error")
+            
+            if current_col == 1:
+                y_pos -= 240
+                current_col = 0
+            else:
+                current_col = 1
+        
+        # Reset for next category if we ended on col 1
+        if current_col == 1:
+            y_pos -= 240
+
+    p.save()
+    buffer.seek(0)
+    return buffer
 class InspectionViewSet(viewsets.ModelViewSet):
     queryset = Inspection.objects.all()
     serializer_class = InspectionSerializer
@@ -417,3 +727,139 @@ class DashboardView(APIView):
             "internal_decisions": list(internal_decisions),
             "customer_decisions": list(customer_decisions),
         })
+
+# ==================== Final Inspection ViewSet ====================
+
+from .models import FinalInspection, FinalInspectionDefect, FinalInspectionSizeCheck, FinalInspectionImage, calculate_sample_size
+from .serializers import FinalInspectionSerializer, FinalInspectionListSerializer, FinalInspectionImageSerializer
+
+
+class FinalInspectionViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Final Inspection Reports with AQL-based shipment audits.
+    """
+    queryset = FinalInspection.objects.all()
+    serializer_class = FinalInspectionSerializer
+    
+    # Filtering and ordering
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    ordering_fields = ['created_at', 'inspection_date', 'result', 'order_no']
+    ordering = ['-created_at']
+    
+    def get_queryset(self):
+        """Optimize queries with select_related and prefetch_related."""
+        queryset = FinalInspection.objects.select_related('customer', 'created_by').order_by('-created_at')
+        
+        # Only prefetch nested data for detail views
+        if self.action in ['retrieve', 'update', 'partial_update']:
+            queryset = queryset.prefetch_related('defects', 'size_checks', 'images')
+        
+        # Filter by query params
+        customer_id = self.request.query_params.get('customer')
+        if customer_id:
+            queryset = queryset.filter(customer_id=customer_id)
+        
+        result = self.request.query_params.get('result')
+        if result:
+            queryset = queryset.filter(result=result)
+        
+        # Date range filtering
+        date_from = self.request.query_params.get('date_from')
+        date_to = self.request.query_params.get('date_to')
+        if date_from:
+            queryset = queryset.filter(inspection_date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(inspection_date__lte=date_to)
+        
+        return queryset
+    
+    def get_serializer_class(self):
+        """Use list serializer for list view, full serializer otherwise."""
+        if self.action == 'list':
+            return FinalInspectionListSerializer
+        return FinalInspectionSerializer
+    
+    def perform_create(self, serializer):
+        """Save the user who created this report."""
+        serializer.save(created_by=self.request.user)
+    
+    @action(detail=True, methods=['post'])
+    def upload_image(self, request, pk=None):
+        """Upload and attach an image to a final inspection with caption and category."""
+        final_inspection = self.get_object()
+        image_file = request.FILES.get('image')
+        caption = request.data.get('caption', 'Final Inspection Image')
+        category = request.data.get('category', 'General')
+        order = request.data.get('order', 0)
+        
+        if not image_file:
+            return Response({'error': 'No image provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Open and compress the image
+            with PILImage.open(image_file) as img:
+                # Convert RGBA/P to RGB for WebP compatibility
+                if img.mode in ('RGBA', 'P', 'LA'):
+                    rgb_img = PILImage.new('RGB', img.size, (255, 255, 255))
+                    if img.mode == 'P':
+                        img = img.convert('RGBA')
+                    rgb_img.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+                    img = rgb_img
+                elif img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
+                # Resize to max 1600x1600
+                img.thumbnail((1600, 1600), PILImage.Resampling.LANCZOS)
+                
+                # Save as WebP with quality 85
+                compressed_buffer = io.BytesIO()
+                img.save(compressed_buffer, format='WEBP', quality=85, method=6)
+                compressed_buffer.seek(0)
+                
+                # Create filename
+                original_name = image_file.name.rsplit('.', 1)[0] if '.' in image_file.name else image_file.name
+                webp_filename = f"{original_name}.webp"
+                
+                # Create Django File object
+                from django.core.files.base import ContentFile
+                compressed_file = ContentFile(compressed_buffer.read(), name=webp_filename)
+                
+                # Create image record
+                img_obj = FinalInspectionImage.objects.create(
+                    final_inspection=final_inspection,
+                    image=compressed_file,
+                    caption=caption,
+                    category=category,
+                    order=int(order)
+                )
+                
+                serializer = FinalInspectionImageSerializer(img_obj)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+                
+        except Exception as e:
+            return Response({'error': f'Image processing failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['post'])
+    def calculate_sample(self, request):
+        """Calculate sample size based on presented quantity."""
+        presented_qty = request.data.get('presented_qty')
+        if not presented_qty:
+            return Response({'error': 'presented_qty is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            presented_qty = int(presented_qty)
+            sample_size = calculate_sample_size(presented_qty)
+            return Response({
+                'presented_qty': presented_qty,
+                'sample_size': sample_size
+            })
+        except (ValueError, TypeError):
+            return Response({'error': 'Invalid presented_qty value'}, status=status.HTTP_400_BAD_REQUEST)
+            
+    @action(detail=True, methods=['get'])
+    def pdf(self, request, pk=None):
+        """Generate and download PDF report for final inspection."""
+        final_inspection = self.get_object()
+        buffer = generate_final_inspection_pdf(final_inspection)
+        filename = f"FIR_{final_inspection.order_no}_{final_inspection.style_no}.pdf"
+        return FileResponse(buffer, filename=filename, content_type='application/pdf')

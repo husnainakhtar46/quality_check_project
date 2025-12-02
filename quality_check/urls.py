@@ -2,7 +2,7 @@
 from rest_framework import routers
 from django.contrib import admin
 from django.urls import path, include
-from qc.views import CustomerViewSet, TemplateViewSet, InspectionViewSet, DashboardView, CustomTokenObtainPairView, FilterPresetViewSet
+from qc.views import CustomerViewSet, TemplateViewSet, InspectionViewSet, DashboardView, CustomTokenObtainPairView, FilterPresetViewSet, FinalInspectionViewSet
 from rest_framework_simplejwt.views import TokenRefreshView
 
 
@@ -11,6 +11,7 @@ router.register(r"customers", CustomerViewSet)
 router.register(r"templates", TemplateViewSet)
 router.register(r"inspections", InspectionViewSet)
 router.register(r'filter-presets', FilterPresetViewSet, basename='filterpreset')
+router.register(r'final-inspections', FinalInspectionViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),

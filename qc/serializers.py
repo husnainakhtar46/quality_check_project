@@ -1,6 +1,9 @@
 # qc/serializers.py
 from rest_framework import serializers
-from .models import Customer, CustomerEmail, Template, TemplatePOM, Inspection, Measurement, InspectionImage, FilterPreset
+from .models import (
+    Customer, CustomerEmail, Template, TemplatePOM, Inspection, Measurement, InspectionImage, FilterPreset,
+    FinalInspection, FinalInspectionDefect, FinalInspectionSizeCheck, FinalInspectionImage
+)
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.utils import timezone
 
@@ -133,3 +136,126 @@ class FilterPresetSerializer(serializers.ModelSerializer):
         model = FilterPreset
         fields = ["id", "name", "description", "filters", "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+# ==================== Final Inspection Serializers ====================
+
+class FinalInspectionDefectSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FinalInspectionDefect
+        fields = ['id', 'description', 'severity', 'count', 'photo']
+
+
+class FinalInspectionSizeCheckSerializer(serializers.ModelSerializer):
+    difference = serializers.ReadOnlyField()
+    deviation_percent = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = FinalInspectionSizeCheck
+        fields = ['id', 'size', 'order_qty', 'packed_qty', 'difference', 'deviation_percent']
+
+
+class FinalInspectionImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FinalInspectionImage
+        fields = ['id', 'image', 'caption', 'category', 'order', 'uploaded_at']
+
+
+class FinalInspectionListSerializer(serializers.ModelSerializer):
+    """Minimal serializer for list views."""
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+    
+    class Meta:
+        model = FinalInspection
+        fields = [
+            'id', 'order_no', 'style_no', 'color', 'customer', 'customer_name',
+            'inspection_date', 'result', 'total_order_qty', 'sample_size',
+            'created_at', 'created_by_username'
+        ]
+
+
+class FinalInspectionSerializer(serializers.ModelSerializer):
+    """Full serializer with nested relationships."""
+    defects = FinalInspectionDefectSerializer(many=True, required=False)
+    size_checks = FinalInspectionSizeCheckSerializer(many=True, required=False)
+    images = FinalInspectionImageSerializer(many=True, read_only=True)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
+    
+    # Read-only calculated fields
+    max_allowed_critical = serializers.ReadOnlyField()
+    max_allowed_major = serializers.ReadOnlyField()
+    max_allowed_minor = serializers.ReadOnlyField()
+    result = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = FinalInspection
+        fields = [
+            'id', 'customer', 'customer_name', 'supplier', 'factory',
+            'inspection_date', 'order_no', 'style_no', 'color',
+            'total_order_qty', 'presented_qty', 'sample_size',
+            'aql_standard', 'aql_critical', 'aql_major', 'aql_minor',
+            'critical_found', 'major_found', 'minor_found',
+            'max_allowed_critical', 'max_allowed_major', 'max_allowed_minor',
+            'result', 'total_cartons', 'selected_cartons',
+            'carton_length', 'carton_width', 'carton_height',
+            'gross_weight', 'net_weight',
+            'quantity_check', 'workmanship', 'packing_method',
+            'marking_label', 'data_measurement', 'hand_feel',
+            'remarks', 'created_at', 'created_by', 'created_by_username',
+            'defects', 'size_checks', 'images'
+        ]
+    
+    def create(self, validated_data):
+        """Create FinalInspection with nested defects and size_checks."""
+        defects_data = validated_data.pop('defects', [])
+        size_checks_data = validated_data.pop('size_checks', [])
+        
+        # Create the main inspection
+        final_inspection = FinalInspection.objects.create(**validated_data)
+        
+        # Create nested defects
+        for defect_data in defects_data:
+            FinalInspectionDefect.objects.create(
+                final_inspection=final_inspection,
+                **defect_data
+            )
+        
+        # Create nested size checks
+        for size_check_data in size_checks_data:
+            FinalInspectionSizeCheck.objects.create(
+                final_inspection=final_inspection,
+                **size_check_data
+            )
+        
+        return final_inspection
+    
+    def update(self, instance, validated_data):
+        """Update FinalInspection with nested defects and size_checks."""
+        defects_data = validated_data.pop('defects', None)
+        size_checks_data = validated_data.pop('size_checks', None)
+        
+        # Update main fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # Update defects if provided
+        if defects_data is not None:
+            instance.defects.all().delete()
+            for defect_data in defects_data:
+                FinalInspectionDefect.objects.create(
+                    final_inspection=instance,
+                    **defect_data
+                )
+        
+        # Update size checks if provided
+        if size_checks_data is not None:
+            instance.size_checks.all().delete()
+            for size_check_data in size_checks_data:
+                FinalInspectionSizeCheck.objects.create(
+                    final_inspection=instance,
+                    **size_check_data
+                )
+        
+        return instance

@@ -1,15 +1,15 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, ClipboardCheck, Users, LogOut, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, FileText, ClipboardCheck, Users, LogOut, MessageSquare, ClipboardList } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 const Sidebar = () => {
     const location = useLocation();
-
     const isSuperUser = localStorage.getItem('is_superuser') === 'true';
 
     const allLinks = [
         { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, adminOnly: true },
         { href: '/inspections', label: 'Evaluation', icon: ClipboardCheck, adminOnly: false },
+        { href: '/final-inspections', label: 'Final Inspection', icon: ClipboardList, adminOnly: false },
         { href: '/customer-feedback', label: 'Customer Feedback', icon: MessageSquare, adminOnly: false },
         { href: '/templates', label: 'Templates', icon: FileText, adminOnly: false },
         { href: '/customers', label: 'Customers', icon: Users, adminOnly: true },
