@@ -1,22 +1,19 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, ClipboardCheck, Users } from 'lucide-react';
+import { FileText, ClipboardCheck, MessageSquare } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 const MobileNav = () => {
     const location = useLocation();
-    const isSuperUser = localStorage.getItem('is_superuser') === 'true';
 
-    const allLinks = [
-        { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, adminOnly: true },
-        { href: '/inspections', label: 'Evaluation', icon: ClipboardCheck, adminOnly: false },
-        { href: '/templates', label: 'Templates', icon: FileText, adminOnly: false },
-        { href: '/customers', label: 'Customers', icon: Users, adminOnly: true },
+    // Only show core pages in bottom navigation
+    const links = [
+        { href: '/inspections', label: 'Evaluation', icon: ClipboardCheck },
+        { href: '/customer-feedback', label: 'Feedback', icon: MessageSquare },
+        { href: '/templates', label: 'Templates', icon: FileText },
     ];
 
-    const links = allLinks.filter(link => isSuperUser || !link.adminOnly);
-
     return (
-        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 md:hidden safe-bottom">
+        <nav className="fixed bottom-0 left-0 right-0 z-[100] bg-white border-t border-gray-200 md:hidden safe-bottom">
             <div className="flex justify-around items-center h-16">
                 {links.map((link) => {
                     const Icon = link.icon;

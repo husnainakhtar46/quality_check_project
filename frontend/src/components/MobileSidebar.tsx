@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, ClipboardCheck, Users, X } from 'lucide-react';
+import { LayoutDashboard, FileText, ClipboardCheck, Users, X, MessageSquare, LogOut } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useEffect } from 'react';
 
@@ -15,16 +15,25 @@ const MobileSidebar = ({ isOpen, onClose }: MobileSidebarProps) => {
     const allLinks = [
         { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, adminOnly: true },
         { href: '/inspections', label: 'Evaluation', icon: ClipboardCheck, adminOnly: false },
+        { href: '/customer-feedback', label: 'Customer Feedback', icon: MessageSquare, adminOnly: false },
         { href: '/templates', label: 'Templates', icon: FileText, adminOnly: false },
         { href: '/customers', label: 'Customers', icon: Users, adminOnly: true },
     ];
 
     const links = allLinks.filter(link => isSuperUser || !link.adminOnly);
 
+    const handleLogout = () => {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('is_superuser');
+        window.location.href = '/login';
+    };
+
     // Close sidebar when route changes
     useEffect(() => {
         onClose();
-    }, [location.pathname, onClose]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [location.pathname]);
 
     // Prevent body scroll when sidebar is open
     useEffect(() => {
@@ -43,7 +52,7 @@ const MobileSidebar = ({ isOpen, onClose }: MobileSidebarProps) => {
             {/* Backdrop */}
             {isOpen && (
                 <div
-                    className="fixed inset-0 bg-black/50 z-40 md:hidden"
+                    className="fixed inset-0 bg-black/50 z-[110] md:hidden"
                     onClick={onClose}
                 />
             )}
@@ -51,7 +60,7 @@ const MobileSidebar = ({ isOpen, onClose }: MobileSidebarProps) => {
             {/* Sidebar */}
             <div
                 className={cn(
-                    "fixed top-0 left-0 h-full w-64 bg-white z-50 transform transition-transform duration-300 ease-in-out md:hidden",
+                    "fixed top-0 left-0 h-full w-64 bg-white z-[120] transform transition-transform duration-300 ease-in-out md:hidden",
                     isOpen ? "translate-x-0" : "-translate-x-full"
                 )}
             >
@@ -89,6 +98,17 @@ const MobileSidebar = ({ isOpen, onClose }: MobileSidebarProps) => {
                             );
                         })}
                     </nav>
+
+                    {/* Logout Button */}
+                    <div className="p-4 border-t border-gray-200">
+                        <button
+                            onClick={handleLogout}
+                            className="flex items-center gap-3 px-4 py-3 w-full text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors touch-target"
+                        >
+                            <LogOut className="w-5 h-5" />
+                            Logout
+                        </button>
+                    </div>
                 </div>
             </div>
         </>
