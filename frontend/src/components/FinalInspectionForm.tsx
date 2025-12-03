@@ -7,6 +7,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
 import { Badge } from './ui/badge';
 import { Plus, Minus, Trash2, Upload, AlertCircle } from 'lucide-react';
 import { useToast } from './ui/use-toast';
@@ -53,6 +54,8 @@ interface MeasurementInput {
   s4: string;
   s5: string;
   s6: string;
+  size_name: string;
+  size_field_id?: string;
 }
 
 interface FormData {
@@ -127,7 +130,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
 
   // --- Form Setup ---
 
-  const { register, control, handleSubmit, watch, setValue } = useForm<FormData>({
+  const { register, control, handleSubmit, watch, setValue, getValues } = useForm<FormData>({
     defaultValues: {
       inspection_date: new Date().toISOString().split('T')[0],
       aql_standard: 'standard',
@@ -163,27 +166,87 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
   const aqlStandard = watch('aql_standard');
   const selectedTemplateId = watch('template');
   const measurements = watch('measurements');
+  const sizeChecks = watch('size_checks');
 
   // --- Effects ---
 
   // 1. Auto-calculate sample size based on PRESENTED QTY
   // Removed client-side calculation effect as it's now handled by performCalculation
 
-  // 2. Populate Measurement Chart when Template is selected
+  // 2. Sync Measurement Chart with Size Checks & Template
   useEffect(() => {
-    if (selectedTemplateId && templates) {
-      const template = templates.find(t => t.id === selectedTemplateId);
-      if (template) {
-        const newMeasurements = template.poms.map(pom => ({
-          pom_name: pom.name,
-          spec: pom.default_std,
-          tol: pom.default_tol,
-          s1: '', s2: '', s3: '', s4: '', s5: '', s6: ''
-        }));
-        replaceMeasurements(newMeasurements);
-      }
+    if (!selectedTemplateId || !templates) return;
+    
+    const template = templates.find(t => t.id === selectedTemplateId);
+    if (!template) return;
+
+    // Current measurements
+    const currentMeasurements = getValues('measurements') || [];
+    const newMeasurements: MeasurementInput[] = [];
+    let hasChanges = false;
+
+    // We iterate over the STABLE fields from useFieldArray
+    sizeFields.forEach((field, idx) => {
+        const sizeCheck = (sizeChecks || [])[idx];
+        const sizeName = sizeCheck && sizeCheck.size ? sizeCheck.size.trim() : `Size ${idx + 1}`;
+        const fieldId = field.id; // Stable ID from RHF
+
+        // 1. Try to find measurements linked by ID
+        let linkedMeasurements = currentMeasurements.filter(m => m.size_field_id === fieldId);
+
+        // 2. If none, try to find by Name (legacy/initial load) and "claim" them
+        if (linkedMeasurements.length === 0) {
+            linkedMeasurements = currentMeasurements.filter(m => !m.size_field_id && m.size_name === sizeName);
+            if (linkedMeasurements.length > 0) {
+                // We found them by name, now we link them by ID for future stability
+                linkedMeasurements = linkedMeasurements.map(m => ({ ...m, size_field_id: fieldId }));
+                hasChanges = true; 
+            }
+        }
+
+        // 3. If still none, create new ones
+        if (linkedMeasurements.length === 0) {
+            template.poms.forEach(pom => {
+                newMeasurements.push({
+                    pom_name: pom.name,
+                    spec: pom.default_std,
+                    tol: pom.default_tol,
+                    size_name: sizeName,
+                    size_field_id: fieldId, // Link by ID
+                    s1: '', s2: '', s3: '', s4: '', s5: '', s6: ''
+                });
+            });
+            hasChanges = true;
+        } else {
+            // We have existing measurements, ensure they are in the new list
+            // Also ensure size_name is up to date (in case of rename)
+            linkedMeasurements.forEach(m => {
+                if (m.size_name !== sizeName) {
+                    newMeasurements.push({ ...m, size_name: sizeName });
+                    hasChanges = true;
+                } else {
+                    newMeasurements.push(m);
+                }
+            });
+        }
+    });
+
+    // Check if we have any orphaned measurements (rows deleted)
+    // The newMeasurements array only contains measurements for currently active fields.
+    // If currentMeasurements has more items than we collected (excluding the ones we just created), it means some were removed.
+    // But we can just compare length or content.
+    
+    // If we haven't detected changes yet, check if total count matches
+    if (!hasChanges) {
+        if (currentMeasurements.length !== newMeasurements.length) {
+            hasChanges = true;
+        }
     }
-  }, [selectedTemplateId, templates, replaceMeasurements]);
+
+    if (hasChanges) {
+      replaceMeasurements(newMeasurements);
+    }
+  }, [selectedTemplateId, templates, sizeChecks, sizeFields, replaceMeasurements, getValues]);
 
   // --- Calculations ---
 
@@ -261,7 +324,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
     return Math.abs(numVal - spec) > tol;
   };
 
-  
+
   // --- Grid Helpers ---
   const getCellId = (r: number, k: string) => `${r}-${k}`;
   const isSelected = (index: number, key: string) => selectedCells.has(getCellId(index, key));
@@ -322,7 +385,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
   const handleCellMouseDown = (index: number, key: string) => {
     const cIndex = columnKeys.indexOf(key);
     if (cIndex === -1) return;
-    
+
     setIsDragSelecting(true);
     setDragStart({ r: index, c: cIndex });
     setSelectedCells(new Set([getCellId(index, key)]));
@@ -392,7 +455,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
       // We need to get current measurements from form state
       // Since we are inside the component, we can use getValues if available or watch
       // But watch('measurements') is already available as `measurements`
-      
+
       const startColIndex = columnKeys.indexOf(startColumn);
       if (startColIndex === -1) return;
 
@@ -421,7 +484,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
     }
   };
 
-// --- Handlers ---
+  // --- Handlers ---
 
   const updateDefectCount = (defect: string, severity: 'critical' | 'major' | 'minor', delta: number) => {
     setDefectCounts(prev => ({
@@ -694,7 +757,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
         </CardContent>
       </Card>
 
-      {/* Section 4: Measurement Chart (NEW) */}
+      {/* Section 4: Measurement Chart (Size-Based) */}
       <Card>
         <CardHeader>
           <CardTitle>4. Measurement Chart</CardTitle>
@@ -707,76 +770,101 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
           )}
 
           {selectedTemplateId && (
-            <div className="overflow-x-auto">
-              <div className="min-w-[900px] grid grid-cols-11 gap-2 mb-2 font-bold text-xs text-gray-600 uppercase text-center bg-gray-50 p-2 rounded">
-                <div className="col-span-2 text-left pl-2">POM</div>
-                <div className="col-span-1">Tol</div>
-                <div className="col-span-1">Std</div>
-                <div className="col-span-1">S1</div>
-                <div className="col-span-1">S2</div>
-                <div className="col-span-1">S3</div>
-                <div className="col-span-1">S4</div>
-                <div className="col-span-1">S5</div>
-                <div className="col-span-1">S6</div>
-              </div>
+            <Accordion type="multiple" className="w-full" defaultValue={sizeFields.map((_, i) => `item-${i}`)}>
+              {sizeFields.map((field, sizeIndex) => {
+                const sc = (sizeChecks || [])[sizeIndex];
+                const sizeName = sc && sc.size ? sc.size : `Size ${sizeIndex + 1}`;
+                // Filter measurements for this size
+                // We need to find the indices in the main `measurementFields` array that correspond to this size.
+                // Since we sync them in order, they should be grouped.
+                // But `map` inside `map` is tricky with `register`.
+                // We can filter `measurementFields` but we need the original `index` for `register`.
 
-              {measurementFields.map((field, index) => {
-                const currentPOM = measurements[index] || {};
+                const sizeMeasurements = measurementFields.map((field, index) => ({ field, index }))
+                  .filter(({ index }) => measurements[index]?.size_field_id === field.id);
+
+                if (sizeMeasurements.length === 0) return null;
 
                 return (
-                  <div key={field.id} className="min-w-[900px] grid grid-cols-11 gap-2 mb-2 items-center hover:bg-gray-50 p-1 rounded">
-                    {/* Read-only POM Info */}
-                    <div className="col-span-2">
-                      <Input {...register(`measurements.${index}.pom_name`)} readOnly className="bg-transparent border-none shadow-none h-8 font-medium text-sm" />
-                    </div>
-                    {/* Swapped Spec and Tol order, renamed Spec to Std visually if needed, but keeping field name 'spec' */}
-                    <div className="col-span-1">
-                      <Input {...register(`measurements.${index}.tol`)} readOnly className="bg-transparent border-none shadow-none h-8 text-center text-xs text-gray-500" />
-                    </div>
-                    <div className="col-span-1">
-                      <Input 
-                        {...register(`measurements.${index}.spec`)} 
-                        className={`h-8 text-center text-sm ${isSelected(index, 'spec') ? 'bg-blue-200 ring-2 ring-blue-500 z-10 relative' : ''}`}
-                        onPaste={handleMeasurementPaste(index, 'spec')}
-                        onKeyDown={(e) => handleCellKeyDown(e, index, 'spec')}
-                        onMouseDown={() => handleCellMouseDown(index, 'spec')}
-                        onMouseEnter={() => handleCellMouseEnter(index, 'spec')}
-                        onTouchStart={() => handleTouchStart(index, 'spec')}
-                        onTouchEnd={handleTouchEnd}
-                        autoComplete="off"
-                      />
-                    </div>
-
-                    {/* Measurement Inputs 1-6 */}
-                    {[1, 2, 3, 4, 5, 6].map((num) => {
-                      const key = `s${num}` as 's1' | 's2' | 's3' | 's4' | 's5' | 's6';
-                      const val = currentPOM[key];
-                      const isBad = isOutOfTolerance(val, currentPOM.spec, currentPOM.tol);
-
-                      return (
-                        <div key={num} className="col-span-1">
-                          <Input
-                            {...register(`measurements.${index}.${key}` as const)}
-                            className={`h-8 text-center text-sm 
-                              ${isSelected(index, key) ? 'bg-blue-200 ring-2 ring-blue-500 z-10 relative' : ''} 
-                              ${!isSelected(index, key) && isBad ? 'bg-red-50 text-red-600 font-bold border-red-300' : ''}
-                            `}
-                            placeholder="-"
-                            onPaste={handleMeasurementPaste(index, key)}
-                            onKeyDown={(e) => handleCellKeyDown(e, index, key)}
-                            onMouseDown={() => handleCellMouseDown(index, key)}
-                            onMouseEnter={() => handleCellMouseEnter(index, key)}
-                            onTouchStart={() => handleTouchStart(index, key)}
-                            onTouchEnd={handleTouchEnd}
-                            autoComplete="off"
-                          />
+                  <AccordionItem key={sizeIndex} value={`item-${sizeIndex}`}>
+                    <AccordionTrigger className="bg-gray-50 px-4 rounded-t-md hover:no-underline hover:bg-gray-100">
+                      <span className="font-bold text-lg text-blue-800">{sizeName}</span>
+                    </AccordionTrigger>
+                    <AccordionContent className="p-2 border rounded-b-md border-t-0">
+                      <div className="overflow-x-auto">
+                        <div className="min-w-[900px] grid grid-cols-11 gap-2 mb-2 font-bold text-xs text-gray-600 uppercase text-center bg-gray-50 p-2 rounded">
+                          <div className="col-span-2 text-left pl-2">POM</div>
+                          <div className="col-span-1">Tol</div>
+                          <div className="col-span-1">Std</div>
+                          <div className="col-span-1">S1</div>
+                          <div className="col-span-1">S2</div>
+                          <div className="col-span-1">S3</div>
+                          <div className="col-span-1">S4</div>
+                          <div className="col-span-1">S5</div>
+                          <div className="col-span-1">S6</div>
                         </div>
-                      );
-                    })}
-                  </div>
+
+                        {sizeMeasurements.map(({ field, index }) => {
+                          const currentPOM = measurements[index] || {};
+
+                          return (
+                            <div key={field.id} className="min-w-[900px] grid grid-cols-11 gap-2 mb-2 items-center hover:bg-gray-50 p-1 rounded">
+                              {/* Read-only POM Info */}
+                              <div className="col-span-2">
+                                <Input {...register(`measurements.${index}.pom_name`)} readOnly className="bg-transparent border-none shadow-none h-8 font-medium text-sm" />
+                              </div>
+                              <div className="col-span-1">
+                                <Input {...register(`measurements.${index}.tol`)} readOnly className="bg-transparent border-none shadow-none h-8 text-center text-xs text-gray-500" />
+                              </div>
+                              <div className="col-span-1">
+                                <Input
+                                  {...register(`measurements.${index}.spec`)}
+                                  className={`h-8 text-center text-sm ${isSelected(index, 'spec') ? 'bg-blue-200 ring-2 ring-blue-500 z-10 relative' : ''}`}
+                                  onPaste={handleMeasurementPaste(index, 'spec')}
+                                  onKeyDown={(e) => handleCellKeyDown(e, index, 'spec')}
+                                  onMouseDown={() => handleCellMouseDown(index, 'spec')}
+                                  onMouseEnter={() => handleCellMouseEnter(index, 'spec')}
+                                  onTouchStart={() => handleTouchStart(index, 'spec')}
+                                  onTouchEnd={handleTouchEnd}
+                                  autoComplete="off"
+                                />
+                              </div>
+
+                              {/* Measurement Inputs 1-6 */}
+                              {[1, 2, 3, 4, 5, 6].map((num) => {
+                                const key = `s${num}` as 's1' | 's2' | 's3' | 's4' | 's5' | 's6';
+                                const val = currentPOM[key];
+                                const isBad = isOutOfTolerance(val, currentPOM.spec, currentPOM.tol);
+
+                                return (
+                                  <div key={num} className="col-span-1">
+                                    <Input
+                                      {...register(`measurements.${index}.${key}` as const)}
+                                      className={`h-8 text-center text-sm 
+                                        ${isSelected(index, key) ? 'bg-blue-200 ring-2 ring-blue-500 z-10 relative' : ''} 
+                                        ${!isSelected(index, key) && isBad ? 'bg-red-50 text-red-600 font-bold border-red-300' : ''}
+                                      `}
+                                      placeholder="-"
+                                      onPaste={handleMeasurementPaste(index, key)}
+                                      onKeyDown={(e) => handleCellKeyDown(e, index, key)}
+                                      onMouseDown={() => handleCellMouseDown(index, key)}
+                                      onMouseEnter={() => handleCellMouseEnter(index, key)}
+                                      onTouchStart={() => handleTouchStart(index, key)}
+                                      onTouchEnd={handleTouchEnd}
+                                      autoComplete="off"
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
                 );
               })}
-            </div>
+            </Accordion>
           )}
         </CardContent>
       </Card>

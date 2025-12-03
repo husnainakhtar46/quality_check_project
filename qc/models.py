@@ -490,6 +490,7 @@ class FinalInspectionMeasurement(models.Model):
     s4 = models.CharField(max_length=50, blank=True)
     s5 = models.CharField(max_length=50, blank=True)
     s6 = models.CharField(max_length=50, blank=True)
+    size_name = models.CharField(max_length=50, blank=True)
 
     def __str__(self):
         return f"{self.pom_name} - {self.final_inspection.order_no}"

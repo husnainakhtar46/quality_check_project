@@ -43,7 +43,7 @@ export default function FinalInspections() {
     queryFn: async () => {
       const params = new URLSearchParams();
       if (resultFilter) params.append('result', resultFilter);
-      
+
       const response = await axios.get(`${API_URL}/final-inspections/?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -74,7 +74,7 @@ export default function FinalInspections() {
           responseType: 'blob',
         }
       );
-      
+
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -82,7 +82,7 @@ export default function FinalInspections() {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      
+
       toast({ title: 'PDF downloaded successfully' });
     } catch (error) {
       toast({ title: 'Failed to download PDF', variant: 'destructive' });
@@ -214,7 +214,7 @@ export default function FinalInspections() {
 
       {/* Form Dialog */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-full w-screen h-screen overflow-y-auto rounded-none">
           <DialogHeader>
             <DialogTitle>{selectedInspection ? 'View/Edit Final Inspection' : 'Create Final Inspection'}</DialogTitle>
           </DialogHeader>
