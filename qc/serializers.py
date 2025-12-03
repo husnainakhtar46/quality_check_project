@@ -142,7 +142,7 @@ class FilterPresetSerializer(serializers.ModelSerializer):
 class FinalInspectionMeasurementSerializer(serializers.ModelSerializer):
     class Meta:
         model = FinalInspectionMeasurement
-        fields = ['id', 'pom', 'tolerance', 'standard', 's1', 's2', 's3', 's4', 's5']
+        fields = ['id', 'pom_name', 'tol', 'spec', 's1', 's2', 's3', 's4', 's5', 's6']
 
 class FinalInspectionDefectSerializer(serializers.ModelSerializer):
     class Meta:

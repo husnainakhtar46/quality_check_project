@@ -376,8 +376,8 @@ def generate_final_inspection_pdf(final_inspection):
     
     if final_inspection.measurements.exists():
         # Header: POM | Tol | Std | S1 | S2 | S3 | S4 | S5
-        headers = ["POM", "Tol (+/-)", "Standard", "S1", "S2", "S3", "S4", "S5"]
-        col_widths = [150, 60, 60, 45, 45, 45, 45, 45]
+        headers = ["POM", "Tol (+/-)", "Standard", "S1", "S2", "S3", "S4", "S5", "S6"]
+        col_widths = [140, 50, 50, 40, 40, 40, 40, 40, 40]
         
         p.setFont("Helvetica-Bold", 9)
         p.setFillColorRGB(0.9, 0.9, 0.9)
@@ -392,7 +392,7 @@ def generate_final_inspection_pdf(final_inspection):
         
         p.setFont("Helvetica", 9)
         for m in final_inspection.measurements.all():
-            vals = [m.pom, str(m.tolerance), str(m.standard), m.s1, m.s2, m.s3, m.s4, m.s5]
+            vals = [m.pom_name, str(m.tol), str(m.spec), m.s1, m.s2, m.s3, m.s4, m.s5, m.s6]
             curr_x = 50
             max_height = 20
             
@@ -404,7 +404,7 @@ def generate_final_inspection_pdf(final_inspection):
                 if i > 2 and v: # Check S1-S5
                     try:
                         val_float = float(v)
-                        if abs(val_float - m.standard) > m.tolerance:
+                        if abs(val_float - m.spec) > m.tol:
                             is_fail = True
                     except:
                         pass

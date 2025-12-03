@@ -126,7 +126,7 @@ class Measurement(models.Model):
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="OK")
 
     def __str__(self):
-        return f"{self.pom_name} - {self.inspection.style}"
+        return f"{self.pom_name_name} - {self.inspection.style}"
 
 class InspectionImage(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -481,17 +481,18 @@ class FinalInspectionImage(models.Model):
 class FinalInspectionMeasurement(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     final_inspection = models.ForeignKey(FinalInspection, related_name='measurements', on_delete=models.CASCADE)
-    pom = models.CharField(max_length=255)
-    tolerance = models.FloatField(default=0.0)
-    standard = models.FloatField(default=0.0) # User editable standard
+    pom_name = models.CharField(max_length=255)
+    tol = models.FloatField(default=0.0)
+    spec = models.FloatField(default=0.0) # User editable standard
     s1 = models.CharField(max_length=50, blank=True)
     s2 = models.CharField(max_length=50, blank=True)
     s3 = models.CharField(max_length=50, blank=True)
     s4 = models.CharField(max_length=50, blank=True)
     s5 = models.CharField(max_length=50, blank=True)
+    s6 = models.CharField(max_length=50, blank=True)
 
     def __str__(self):
-        return f"{self.pom} - {self.final_inspection.order_no}"
+        return f"{self.pom_name} - {self.final_inspection.order_no}"
 
     class Meta:
         ordering = ['id']

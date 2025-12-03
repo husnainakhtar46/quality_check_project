@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
@@ -52,6 +52,7 @@ interface MeasurementInput {
   s3: string;
   s4: string;
   s5: string;
+  s6: string;
 }
 
 interface FormData {
@@ -94,6 +95,13 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
 
   const [customDefect, setCustomDefect] = useState('');
   const [uploadedImages, setUploadedImages] = useState<Array<{ file: File; caption: string; category: string }>>([]);
+  // --- Grid Selection & Paste State ---
+  const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
+  const [isDragSelecting, setIsDragSelecting] = useState(false);
+  const [dragStart, setDragStart] = useState<{ r: number, c: number } | null>(null);
+  const columnKeys = ['spec', 's1', 's2', 's3', 's4', 's5', 's6'];
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+
 
   // --- Queries ---
 
@@ -170,7 +178,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
           pom_name: pom.name,
           spec: pom.default_std,
           tol: pom.default_tol,
-          s1: '', s2: '', s3: '', s4: '', s5: ''
+          s1: '', s2: '', s3: '', s4: '', s5: '', s6: ''
         }));
         replaceMeasurements(newMeasurements);
       }
@@ -253,7 +261,167 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
     return Math.abs(numVal - spec) > tol;
   };
 
-  // --- Handlers ---
+  
+  // --- Grid Helpers ---
+  const getCellId = (r: number, k: string) => `${r}-${k}`;
+  const isSelected = (index: number, key: string) => selectedCells.has(getCellId(index, key));
+
+  // Handle KeyDown (Enter for Navigation, Backspace/Delete for Bulk Clear)
+  const handleCellKeyDown = (e: React.KeyboardEvent, index: number, key: string) => {
+    // Handle Enter for Navigation
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const currentColIdx = columnKeys.indexOf(key);
+      if (currentColIdx === -1) return;
+
+      // Try moving down (same column, next row)
+      const nextRowIdx = index + 1;
+      if (nextRowIdx < measurementFields.length) {
+        const nextInput = document.querySelector(`input[name="measurements.${nextRowIdx}.${key}"]`) as HTMLInputElement;
+        if (nextInput) {
+          nextInput.focus();
+          nextInput.select();
+        }
+      } else {
+        // If at bottom, move to top of next column
+        const nextColIdx = currentColIdx + 1;
+        if (nextColIdx < columnKeys.length) {
+          const nextColKey = columnKeys[nextColIdx];
+          const nextInput = document.querySelector(`input[name="measurements.0.${nextColKey}"]`) as HTMLInputElement;
+          if (nextInput) {
+            nextInput.focus();
+            nextInput.select();
+          }
+        }
+      }
+      return;
+    }
+
+    // If Backspace/Delete is pressed
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      if (selectedCells.size > 0) {
+        if (selectedCells.has(getCellId(index, key)) || selectedCells.size > 0) {
+          e.preventDefault();
+          let count = 0;
+          selectedCells.forEach(cellId => {
+            const [rStr, k] = cellId.split('-');
+            const r = parseInt(rStr);
+            // We need to use setValue from useForm
+            setValue(`measurements.${r}.${k}` as any, '');
+            count++;
+          });
+          if (count > 0) {
+            toast({ title: `Cleared ${count} cells` });
+          }
+        }
+      }
+    }
+  };
+
+  // Mouse Down (Start Drag)
+  const handleCellMouseDown = (index: number, key: string) => {
+    const cIndex = columnKeys.indexOf(key);
+    if (cIndex === -1) return;
+    
+    setIsDragSelecting(true);
+    setDragStart({ r: index, c: cIndex });
+    setSelectedCells(new Set([getCellId(index, key)]));
+  };
+
+  // Mouse Enter (Drag Over)
+  const handleCellMouseEnter = (index: number, key: string) => {
+    if (isDragSelecting && dragStart) {
+      const cIndex = columnKeys.indexOf(key);
+      if (cIndex === -1) return;
+
+      const rMin = Math.min(dragStart.r, index);
+      const rMax = Math.max(dragStart.r, index);
+      const cMin = Math.min(dragStart.c, cIndex);
+      const cMax = Math.max(dragStart.c, cIndex);
+
+      const newSet = new Set<string>();
+      for (let r = rMin; r <= rMax; r++) {
+        for (let c = cMin; c <= cMax; c++) {
+          newSet.add(getCellId(r, columnKeys[c]));
+        }
+      }
+      setSelectedCells(newSet);
+    }
+  };
+
+  // Global Mouse Up (End Drag)
+  useEffect(() => {
+    const handleUp = () => {
+      setIsDragSelecting(false);
+      setDragStart(null);
+    };
+    window.addEventListener('mouseup', handleUp);
+    window.addEventListener('touchend', handleUp);
+    return () => {
+      window.removeEventListener('mouseup', handleUp);
+      window.removeEventListener('touchend', handleUp);
+    };
+  }, []);
+
+  // Mobile: Long Press Logic
+  const handleTouchStart = (index: number, key: string) => {
+    longPressTimer.current = setTimeout(() => {
+      const id = getCellId(index, key);
+      setSelectedCells(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(id)) newSet.delete(id);
+        else newSet.add(id);
+        return newSet;
+      });
+      if (navigator.vibrate) navigator.vibrate(50);
+    }, 500);
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  };
+
+  // Paste Handler
+  const handleMeasurementPaste = (rowIndex: number, startColumn: string) => (event: React.ClipboardEvent<HTMLInputElement>) => {
+    const pastedData = event.clipboardData.getData('text');
+    const lines = pastedData.split('\n').filter(line => line.trim());
+    const firstLineColumns = lines[0]?.split('\t') || [];
+
+    if (lines.length > 1 || firstLineColumns.length > 1) {
+      event.preventDefault();
+      // We need to get current measurements from form state
+      // Since we are inside the component, we can use getValues if available or watch
+      // But watch('measurements') is already available as `measurements`
+      
+      const startColIndex = columnKeys.indexOf(startColumn);
+      if (startColIndex === -1) return;
+
+      const hasHeader = /pom|name|std|spec|s1|s2|s3|s4|s5|s6/i.test(lines[0]);
+      const dataRows = hasHeader ? lines.slice(1) : lines;
+      const affectedRows = Math.min(dataRows.length, measurementFields.length - rowIndex);
+
+      if (!confirm(`Paste ${dataRows.length} row(s) starting from ${startColumn.toUpperCase()} at row ${rowIndex + 1}?`)) {
+        return;
+      }
+
+      dataRows.forEach((line, rowOffset) => {
+        const targetRow = rowIndex + rowOffset;
+        if (targetRow < measurementFields.length) {
+          const columns = line.split('\t');
+          columns.forEach((value, colOffset) => {
+            const targetColIndex = startColIndex + colOffset;
+            if (targetColIndex < columnKeys.length) {
+              const fieldName = columnKeys[targetColIndex];
+              setValue(`measurements.${targetRow}.${fieldName}` as any, value?.trim() || '');
+            }
+          });
+        }
+      });
+      toast({ title: `Pasted ${affectedRows} rows` });
+    }
+  };
+
+// --- Handlers ---
 
   const updateDefectCount = (defect: string, severity: 'critical' | 'major' | 'minor', delta: number) => {
     setDefectCounts(prev => ({
@@ -295,7 +463,15 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
           ...(counts.minor > 0 ? [{ description, severity: 'Minor', count: counts.minor }] : []),
         ]);
 
-      const payload = { ...data, defects };
+      // Clean up measurements
+      const measurements = data.measurements.map(m => ({
+        ...m,
+        spec: isNaN(Number(m.spec)) ? 0 : Number(m.spec),
+        s1: m.s1 || '', s2: m.s2 || '', s3: m.s3 || '',
+        s4: m.s4 || '', s5: m.s5 || '', s6: m.s6 || ''
+      }));
+
+      const payload = { ...data, defects, measurements };
 
       // 2. Create Inspection Record
       const response = await axios.post(`${API_URL}/final-inspections/`, payload, {
@@ -532,36 +708,48 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
 
           {selectedTemplateId && (
             <div className="overflow-x-auto">
-              <div className="min-w-[800px] grid grid-cols-10 gap-2 mb-2 font-bold text-xs text-gray-600 uppercase text-center bg-gray-50 p-2 rounded">
-                <div className="col-span-3 text-left pl-2">POM</div>
-                <div className="col-span-1">Spec</div>
+              <div className="min-w-[900px] grid grid-cols-11 gap-2 mb-2 font-bold text-xs text-gray-600 uppercase text-center bg-gray-50 p-2 rounded">
+                <div className="col-span-2 text-left pl-2">POM</div>
                 <div className="col-span-1">Tol</div>
+                <div className="col-span-1">Std</div>
                 <div className="col-span-1">S1</div>
                 <div className="col-span-1">S2</div>
                 <div className="col-span-1">S3</div>
                 <div className="col-span-1">S4</div>
                 <div className="col-span-1">S5</div>
+                <div className="col-span-1">S6</div>
               </div>
 
               {measurementFields.map((field, index) => {
                 const currentPOM = measurements[index] || {};
 
                 return (
-                  <div key={field.id} className="min-w-[800px] grid grid-cols-10 gap-2 mb-2 items-center hover:bg-gray-50 p-1 rounded">
+                  <div key={field.id} className="min-w-[900px] grid grid-cols-11 gap-2 mb-2 items-center hover:bg-gray-50 p-1 rounded">
                     {/* Read-only POM Info */}
-                    <div className="col-span-3">
+                    <div className="col-span-2">
                       <Input {...register(`measurements.${index}.pom_name`)} readOnly className="bg-transparent border-none shadow-none h-8 font-medium text-sm" />
                     </div>
-                    <div className="col-span-1">
-                      <Input {...register(`measurements.${index}.spec`)} readOnly className="bg-transparent border-none shadow-none h-8 text-center text-xs text-gray-500" />
-                    </div>
+                    {/* Swapped Spec and Tol order, renamed Spec to Std visually if needed, but keeping field name 'spec' */}
                     <div className="col-span-1">
                       <Input {...register(`measurements.${index}.tol`)} readOnly className="bg-transparent border-none shadow-none h-8 text-center text-xs text-gray-500" />
                     </div>
+                    <div className="col-span-1">
+                      <Input 
+                        {...register(`measurements.${index}.spec`)} 
+                        className={`h-8 text-center text-sm ${isSelected(index, 'spec') ? 'bg-blue-200 ring-2 ring-blue-500 z-10 relative' : ''}`}
+                        onPaste={handleMeasurementPaste(index, 'spec')}
+                        onKeyDown={(e) => handleCellKeyDown(e, index, 'spec')}
+                        onMouseDown={() => handleCellMouseDown(index, 'spec')}
+                        onMouseEnter={() => handleCellMouseEnter(index, 'spec')}
+                        onTouchStart={() => handleTouchStart(index, 'spec')}
+                        onTouchEnd={handleTouchEnd}
+                        autoComplete="off"
+                      />
+                    </div>
 
-                    {/* Measurement Inputs 1-5 */}
-                    {[1, 2, 3, 4, 5].map((num) => {
-                      const key = `s${num}` as 's1' | 's2' | 's3' | 's4' | 's5';
+                    {/* Measurement Inputs 1-6 */}
+                    {[1, 2, 3, 4, 5, 6].map((num) => {
+                      const key = `s${num}` as 's1' | 's2' | 's3' | 's4' | 's5' | 's6';
                       const val = currentPOM[key];
                       const isBad = isOutOfTolerance(val, currentPOM.spec, currentPOM.tol);
 
@@ -569,8 +757,18 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
                         <div key={num} className="col-span-1">
                           <Input
                             {...register(`measurements.${index}.${key}` as const)}
-                            className={`h-8 text-center text-sm ${isBad ? 'bg-red-50 text-red-600 font-bold border-red-300' : ''}`}
+                            className={`h-8 text-center text-sm 
+                              ${isSelected(index, key) ? 'bg-blue-200 ring-2 ring-blue-500 z-10 relative' : ''} 
+                              ${!isSelected(index, key) && isBad ? 'bg-red-50 text-red-600 font-bold border-red-300' : ''}
+                            `}
                             placeholder="-"
+                            onPaste={handleMeasurementPaste(index, key)}
+                            onKeyDown={(e) => handleCellKeyDown(e, index, key)}
+                            onMouseDown={() => handleCellMouseDown(index, key)}
+                            onMouseEnter={() => handleCellMouseEnter(index, key)}
+                            onTouchStart={() => handleTouchStart(index, key)}
+                            onTouchEnd={handleTouchEnd}
+                            autoComplete="off"
                           />
                         </div>
                       );
