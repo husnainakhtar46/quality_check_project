@@ -50,7 +50,7 @@ export default function FinalInspections() {
       return response.data;
     },
     staleTime: 0,
-    gcTime: 0,
+    cacheTime: 0,
     refetchOnMount: 'always',
   });
 
@@ -98,6 +98,14 @@ export default function FinalInspections() {
     insp.style_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (insp.customer_name?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
+
+  // Debug logging
+  console.log('FinalInspections Debug:', {
+    inspectionsCount: inspections?.length,
+    filteredCount: filteredInspections?.length,
+    searchTerm,
+    isLoading
+  });
 
   const getResultBadge = (result: string) => {
     switch (result) {

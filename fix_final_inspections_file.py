@@ -1,4 +1,17 @@
-import { useState } from 'react';
+import os
+import shutil
+
+# File path
+file_path = r'c:\Users\husna\Music\Dapp\quality_check_project\frontend\src\pages\FinalInspections.tsx'
+backup_path = file_path + '.backup'
+
+# Create backup of corrupted file
+if os.path.exists(file_path):
+    shutil.copy(file_path, backup_path)
+    print(f"✓ Backed up corrupted file to {backup_path}")
+
+# Correct file content
+correct_content = '''import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
@@ -230,3 +243,15 @@ export default function FinalInspections() {
     </div>
   );
 }
+'''
+
+# Write the correct content
+with open(file_path, 'w', encoding='utf-8', newline='\r\n') as f:
+    f.write(correct_content)
+
+print(f"✓ Successfully restored {os.path.basename(file_path)}")
+print(f"✓ File is now fixed and ready to use")
+print(f"\nChanges made:")
+print("  - Restored complete file structure")
+print("  - Fixed React Query cache settings (gcTime instead of cacheTime)")
+print("  - Added responsive spacing (space-y-4 md:space-y-6 pb-10)")

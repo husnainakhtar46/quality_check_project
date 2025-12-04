@@ -33,6 +33,7 @@ interface TemplatePOM {
 }
 
 interface Template {
+  customer: string;
   id: string;
   name: string;
   poms: TemplatePOM[];
@@ -176,7 +177,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
   // 2. Sync Measurement Chart with Size Checks & Template
   useEffect(() => {
     if (!selectedTemplateId || !templates) return;
-    
+
     const template = templates.find(t => t.id === selectedTemplateId);
     if (!template) return;
 
@@ -187,60 +188,60 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
 
     // We iterate over the STABLE fields from useFieldArray
     sizeFields.forEach((field, idx) => {
-        const sizeCheck = (sizeChecks || [])[idx];
-        const sizeName = sizeCheck && sizeCheck.size ? sizeCheck.size.trim() : `Size ${idx + 1}`;
-        const fieldId = field.id; // Stable ID from RHF
+      const sizeCheck = (sizeChecks || [])[idx];
+      const sizeName = sizeCheck && sizeCheck.size ? sizeCheck.size.trim() : `Size ${idx + 1}`;
+      const fieldId = field.id; // Stable ID from RHF
 
-        // 1. Try to find measurements linked by ID
-        let linkedMeasurements = currentMeasurements.filter(m => m.size_field_id === fieldId);
+      // 1. Try to find measurements linked by ID
+      let linkedMeasurements = currentMeasurements.filter(m => m.size_field_id === fieldId);
 
-        // 2. If none, try to find by Name (legacy/initial load) and "claim" them
-        if (linkedMeasurements.length === 0) {
-            linkedMeasurements = currentMeasurements.filter(m => !m.size_field_id && m.size_name === sizeName);
-            if (linkedMeasurements.length > 0) {
-                // We found them by name, now we link them by ID for future stability
-                linkedMeasurements = linkedMeasurements.map(m => ({ ...m, size_field_id: fieldId }));
-                hasChanges = true; 
-            }
+      // 2. If none, try to find by Name (legacy/initial load) and "claim" them
+      if (linkedMeasurements.length === 0) {
+        linkedMeasurements = currentMeasurements.filter(m => !m.size_field_id && m.size_name === sizeName);
+        if (linkedMeasurements.length > 0) {
+          // We found them by name, now we link them by ID for future stability
+          linkedMeasurements = linkedMeasurements.map(m => ({ ...m, size_field_id: fieldId }));
+          hasChanges = true;
         }
+      }
 
-        // 3. If still none, create new ones
-        if (linkedMeasurements.length === 0) {
-            template.poms.forEach(pom => {
-                newMeasurements.push({
-                    pom_name: pom.name,
-                    spec: pom.default_std,
-                    tol: pom.default_tol,
-                    size_name: sizeName,
-                    size_field_id: fieldId, // Link by ID
-                    s1: '', s2: '', s3: '', s4: '', s5: '', s6: ''
-                });
-            });
+      // 3. If still none, create new ones
+      if (linkedMeasurements.length === 0) {
+        template.poms.forEach(pom => {
+          newMeasurements.push({
+            pom_name: pom.name,
+            spec: pom.default_std,
+            tol: pom.default_tol,
+            size_name: sizeName,
+            size_field_id: fieldId, // Link by ID
+            s1: '', s2: '', s3: '', s4: '', s5: '', s6: ''
+          });
+        });
+        hasChanges = true;
+      } else {
+        // We have existing measurements, ensure they are in the new list
+        // Also ensure size_name is up to date (in case of rename)
+        linkedMeasurements.forEach(m => {
+          if (m.size_name !== sizeName) {
+            newMeasurements.push({ ...m, size_name: sizeName });
             hasChanges = true;
-        } else {
-            // We have existing measurements, ensure they are in the new list
-            // Also ensure size_name is up to date (in case of rename)
-            linkedMeasurements.forEach(m => {
-                if (m.size_name !== sizeName) {
-                    newMeasurements.push({ ...m, size_name: sizeName });
-                    hasChanges = true;
-                } else {
-                    newMeasurements.push(m);
-                }
-            });
-        }
+          } else {
+            newMeasurements.push(m);
+          }
+        });
+      }
     });
 
     // Check if we have any orphaned measurements (rows deleted)
     // The newMeasurements array only contains measurements for currently active fields.
     // If currentMeasurements has more items than we collected (excluding the ones we just created), it means some were removed.
     // But we can just compare length or content.
-    
+
     // If we haven't detected changes yet, check if total count matches
     if (!hasChanges) {
-        if (currentMeasurements.length !== newMeasurements.length) {
-            hasChanges = true;
-        }
+      if (currentMeasurements.length !== newMeasurements.length) {
+        hasChanges = true;
+      }
     }
 
     if (hasChanges) {
@@ -571,10 +572,10 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 max-w-6xl mx-auto pb-20">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 w-full max-w-6xl mx-auto pb-20 px-4 md:px-6 lg:px-8">
       {/* Header */}
-      <div className="flex justify-between items-center sticky top-0 bg-white z-20 p-4 shadow-sm border-b">
-        <h2 className="text-2xl font-bold text-gray-800">New Final Inspection</h2>
+      <div className="flex justify-between items-center sticky top-0 bg-white z-20 p-4 shadow-sm border-b -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8">
+        <h2 className="text-xl md:text-2xl font-bold text-gray-800">{inspectionId ? 'Edit Final Inspection' : 'New Final Inspection'}</h2>
         <div className="flex gap-2">
           <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
           <Button type="submit" disabled={createMutation.isPending} className="bg-blue-600 hover:bg-blue-700">
@@ -604,7 +605,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
             <Label>Template (For Measurements)</Label>
             <select {...register('template')} className="w-full border rounded p-2 mt-1">
               <option value="">Select Template</option>
-              {templates?.map((t: Template) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              {templates?.filter(t => !watch('customer') || t.customer === watch('customer')).map((t: Template) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
           <div>
@@ -709,8 +710,8 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
           <CardTitle>3. Quantity Breakdown (Size Check)</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            <div className="grid grid-cols-12 gap-2 font-semibold text-xs uppercase text-gray-500 mb-1">
+          <div className="space-y-2 overflow-x-auto">
+            <div className="grid grid-cols-12 gap-2 font-semibold text-xs uppercase text-gray-500 mb-1 min-w-[600px]">
               <div className="col-span-3">Size</div>
               <div className="col-span-3">Order Qty</div>
               <div className="col-span-3">Packed Qty</div>
@@ -726,7 +727,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
               const isHighDev = Math.abs(parseFloat(dev)) > 5;
 
               return (
-                <div key={field.id} className="grid grid-cols-12 gap-2 items-center">
+                <div key={field.id} className="grid grid-cols-12 gap-2 items-center min-w-[600px]">
                   <div className="col-span-3">
                     <Input {...register(`size_checks.${index}.size` as const)} placeholder="e.g. M" className="h-9" />
                   </div>
@@ -876,7 +877,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
         </CardHeader>
         <CardContent className="space-y-3">
           {Object.keys(defectCounts).map(defect => (
-            <div key={defect} className="flex items-center justify-between p-3 bg-white border rounded hover:shadow-sm transition-all">
+            <div key={defect} className="flex flex-col md:flex-row md:items-center justify-between gap-2 p-3 bg-white border rounded hover:shadow-sm transition-all">
               <span className="font-medium flex-1 text-gray-700">{defect}</span>
               <div className="flex gap-4">
                 <div className="flex items-center gap-1">
@@ -944,6 +945,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
                 type="file"
                 multiple
                 accept="image/*"
+                    capture="environment"
                 onChange={handleImageUpload}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
