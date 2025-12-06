@@ -27,7 +27,10 @@ const Sidebar = () => {
     return (
         <div className="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col">
             <div className="p-6 border-b border-gray-200">
-                <h1 className="text-2xl font-bold text-primary">Fit Flow</h1>
+                <div className="flex items-center gap-2">
+                    <img src="/icon-192.png" alt="Fit Flow Logo" className="w-8 h-8" />
+                    <h1 className="text-2xl font-bold text-primary">Fit Flow</h1>
+                </div>
             </div>
             <nav className="flex-1 p-4 space-y-2">
                 {links.map((link) => {
