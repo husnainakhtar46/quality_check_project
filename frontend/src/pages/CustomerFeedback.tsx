@@ -179,6 +179,7 @@ const CustomerFeedback = () => {
                             <TableHead>Stage</TableHead>
                             <TableHead>QA Decision</TableHead>
                             <TableHead>Customer Decision</TableHead>
+                            <TableHead>Evaluation Date</TableHead>
                             <TableHead>Feedback Date</TableHead>
                             <TableHead className="w-[100px]">Actions</TableHead>
                         </TableRow>
@@ -195,8 +196,11 @@ const CustomerFeedback = () => {
                                     </Badge>
                                 </TableCell>
                                 <TableCell>{getDecisionBadge(inspection.customer_decision)}</TableCell>
+                                <TableCell className="text-sm text-gray-600">
+                                    {inspection.created_at ? new Date(inspection.created_at).toLocaleDateString('en-GB') : '-'}
+                                </TableCell>
                                 <TableCell>
-                                    {inspection.customer_feedback_date ? new Date(inspection.customer_feedback_date).toLocaleDateString() : '-'}
+                                    {inspection.customer_feedback_date ? new Date(inspection.customer_feedback_date).toLocaleDateString('en-GB') : '-'}
                                 </TableCell>
                                 <TableCell>
                                     <Button
