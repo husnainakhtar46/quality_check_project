@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Download, Plus, Search, Eye, Trash2, FileText } from 'lucide-react';
+import { Download, Plus, Search, Pencil, Trash2, FileText } from 'lucide-react';
 import { useToast } from '../components/ui/use-toast';
 import FinalInspectionForm from '../components/FinalInspectionForm';
 
@@ -189,7 +189,7 @@ export default function FinalInspections() {
                         setIsFormOpen(true);
                       }}
                     >
-                      <Eye className="h-4 w-4" />
+                      <Pencil className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="outline"

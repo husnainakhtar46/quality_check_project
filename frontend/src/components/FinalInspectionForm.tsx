@@ -130,9 +130,21 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
     },
   });
 
+  const { data: inspectionData, isLoading: isLoadingInspection } = useQuery({
+    queryKey: ['finalInspection', inspectionId],
+    queryFn: async () => {
+      if (!inspectionId) return null;
+      const response = await axios.get(`${API_URL}/final-inspections/${inspectionId}/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return response.data;
+    },
+    enabled: !!inspectionId,
+  });
+
   // --- Form Setup ---
 
-  const { register, control, handleSubmit, watch, setValue, getValues } = useForm<FormData>({
+  const { register, control, handleSubmit, watch, setValue, getValues, reset } = useForm<FormData>({
     defaultValues: {
       inspection_date: new Date().toISOString().split('T')[0],
       inspection_attempt: '1st',
@@ -173,7 +185,55 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
 
   // --- Effects ---
 
-  // 1. Auto-calculate sample size based on PRESENTED QTY
+  // 1. Populate Form Data on Edit
+  useEffect(() => {
+    if (inspectionData) {
+      // 1. Reset Form Fields
+      const formData = {
+        ...inspectionData,
+        // Ensure dates are formatted correctly for input type="date"
+        inspection_date: inspectionData.inspection_date.split('T')[0],
+        customer: inspectionData.customer?.id || inspectionData.customer, // Handle nested object or ID
+        template: inspectionData.template?.id || inspectionData.template,
+      };
+
+      // Reset form with valid data
+      // We need to carefully handle nested arrays (measurements, size_checks)
+      // The serializer returns them, so spreading inspectionData should work mostly,
+      // but we might need to ensure they match the FormData interface exactly.
+      reset(formData);
+
+      // 2. Set Defect Counts
+      if (inspectionData.defects) {
+        const newCounts: Record<string, { critical: number; major: number; minor: number }> = {};
+        // Initialize with zeros for common defects
+        COMMON_DEFECTS.forEach(d => newCounts[d] = { critical: 0, major: 0, minor: 0 });
+
+        inspectionData.defects.forEach((d: any) => {
+          if (!newCounts[d.description]) {
+            newCounts[d.description] = { critical: 0, major: 0, minor: 0 };
+          }
+          const sev = d.severity.toLowerCase() as 'critical' | 'major' | 'minor';
+          newCounts[d.description][sev] = d.count;
+        });
+        setDefectCounts(newCounts);
+      }
+
+      // 3. Set Images
+      if (inspectionData.images) {
+        setUploadedImages(inspectionData.images.map((img: any) => ({
+          file: new File([], "existing_image"), // Placeholder
+          previewUrl: img.image.startsWith('http') ? img.image : `${API_URL}${img.image}`, // Fix URL
+          caption: img.caption,
+          category: img.category,
+          id: img.id,
+          isExisting: true
+        })));
+      }
+    }
+  }, [inspectionData, reset]);
+
+  // 2. Auto-calculate sample size based on PRESENTED QTY
   // Removed client-side calculation effect as it's now handled by performCalculation
 
   // 2. Sync Measurement Chart with Size Checks & Template
@@ -546,6 +606,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
 
       // 3. Upload images
       for (const img of uploadedImages) {
+        if ((img as any).isExisting) continue; // Skip existing images
         const formData = new FormData();
         formData.append('image', img.file);
         formData.append('caption', img.caption);
@@ -569,9 +630,76 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
     },
   });
 
+  // Update Mutation
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: FormData }) => {
+      // 1. Prepare defects array
+      const defects = Object.entries(defectCounts)
+        .flatMap(([description, counts]) => [
+          ...(counts.critical > 0 ? [{ description, severity: 'Critical', count: counts.critical }] : []),
+          ...(counts.major > 0 ? [{ description, severity: 'Major', count: counts.major }] : []),
+          ...(counts.minor > 0 ? [{ description, severity: 'Minor', count: counts.minor }] : []),
+        ]);
+
+      // Clean up measurements
+      const measurements = data.measurements.map(m => ({
+        ...m,
+        spec: isNaN(Number(m.spec)) ? 0 : Number(m.spec),
+        tol: isNaN(Number(m.tol)) ? 0 : Number(m.tol),
+        s1: m.s1 || '', s2: m.s2 || '', s3: m.s3 || '',
+        s4: m.s4 || '', s5: m.s5 || '', s6: m.s6 || '',
+      }));
+
+      const payload = { ...data, defects, measurements };
+      if ('images' in payload) delete (payload as any).images; // Prevent overwriting images
+
+      const response = await axios.put(`${API_URL}/final-inspections/${id}/`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // 3. Upload NEW images only
+      for (const img of uploadedImages) {
+        if ((img as any).isExisting) continue; // Skip existing images
+
+        const formData = new FormData();
+        formData.append('image', img.file);
+        formData.append('caption', img.caption);
+        formData.append('category', img.category);
+
+        await axios.post(`${API_URL}/final-inspections/${id}/upload_image/`, formData, {
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
+        });
+      }
+
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['finalInspections'] });
+      queryClient.invalidateQueries({ queryKey: ['finalInspection', inspectionId] });
+      toast({ title: 'Final Inspection updated successfully!' });
+      onClose();
+    },
+    onError: (error: any) => {
+      console.error(error);
+      toast({ title: 'Failed to update report', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const [submitAction, setSubmitAction] = useState<'create' | 'update' | 'saveAsNew'>('create');
+
   const onSubmit = (data: FormData) => {
-    if (confirm('Are you confirmed to Submit?')) {
-      createMutation.mutate(data);
+    if (submitAction === 'update' && inspectionId) {
+      if (confirm('Are you confirmed to Update this report?')) {
+        updateMutation.mutate({ id: inspectionId, data });
+      }
+    } else if (submitAction === 'saveAsNew') {
+      if (confirm('Create New Inspection from this data? (Photos will NOT be copied)')) {
+        createMutation.mutate(data);
+      }
+    } else {
+      if (confirm('Are you confirmed to Submit?')) {
+        createMutation.mutate(data);
+      }
     }
   };
 
@@ -590,9 +718,9 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
   };
 
   return (
-    <form onKeyDown={handleKeyDown} onSubmit={handleSubmit(onSubmit)} className="space-y-6 w-full max-w-6xl mx-auto pb-20 px-4 md:px-6 lg:px-8">
+    <form onKeyDown={handleKeyDown} onSubmit={handleSubmit(onSubmit)} className="space-y-6 w-full max-w-6xl mx-auto pb-20 px-4 md:px-6 lg:px-8" >
       {/* Header */}
-      <div className="flex justify-between items-center border-b -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8 py-4 mb-4">
+      < div className="flex justify-between items-center border-b -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8 py-4 mb-4" >
         <h2 className="text-xl md:text-2xl font-bold text-gray-800">{inspectionId ? 'Edit Final Inspection' : 'New Final Inspection'}</h2>
         <div className="flex gap-2">
           <Button type="button" variant="outline" onClick={handleCancel}>Cancel</Button>
@@ -600,10 +728,10 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
             {createMutation.isPending ? 'Submitting...' : 'Submit Report'}
           </Button>
         </div>
-      </div>
+      </div >
 
       {/* Section 1: General Information */}
-      <Card>
+      < Card >
         <CardHeader>
           <CardTitle>1. General Information</CardTitle>
         </CardHeader>
@@ -676,10 +804,10 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
             </div>
           </div>
         </CardContent>
-      </Card>
+      </Card >
 
       {/* Section 2: AQL Status */}
-      <Card className="border-t-4 border-t-blue-600">
+      < Card className="border-t-4 border-t-blue-600" >
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle>2. AQL Result (Server Verified)</CardTitle>
           <Badge
@@ -728,10 +856,10 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
             </div>
           </div>
         </CardContent>
-      </Card>
+      </Card >
 
       {/* Section 3: Quantity Breakdown */}
-      <Card>
+      < Card >
         <CardHeader>
           <CardTitle>3. Quantity Breakdown (Size Check)</CardTitle>
         </CardHeader>
@@ -782,10 +910,10 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
             </Button>
           </div>
         </CardContent>
-      </Card>
+      </Card >
 
       {/* Section 4: Measurement Chart (Size-Based) */}
-      <Card>
+      < Card >
         <CardHeader>
           <CardTitle>4. Measurement Chart</CardTitle>
         </CardHeader>
@@ -894,10 +1022,10 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
             </Accordion>
           )}
         </CardContent>
-      </Card>
+      </Card >
 
       {/* Section 5: Defect Breakdown */}
-      <Card>
+      < Card >
         <CardHeader>
           <CardTitle>5. Defect Breakdown</CardTitle>
         </CardHeader>
@@ -938,10 +1066,10 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
             <Button type="button" onClick={addCustomDefect} variant="secondary">Add</Button>
           </div>
         </CardContent>
-      </Card>
+      </Card >
 
       {/* Section 6: Shipment Details */}
-      <Card>
+      < Card >
         <CardHeader>
           <CardTitle>6. Shipment Details</CardTitle>
         </CardHeader>
@@ -957,10 +1085,10 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
             <Input placeholder="H" type="number" step="0.1" {...register('carton_height', { valueAsNumber: true })} />
           </div>
         </CardContent>
-      </Card>
+      </Card >
 
       {/* Section 7: Photo Evidence */}
-      <Card>
+      < Card >
         <CardHeader>
           <CardTitle>7. Photo Evidence</CardTitle>
         </CardHeader>
@@ -987,7 +1115,11 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
                 {uploadedImages.map((img, idx) => (
                   <div key={idx} className="flex gap-3 p-3 bg-white border rounded shadow-sm items-start">
                     <div className="h-24 w-24 bg-gray-100 rounded overflow-hidden flex-shrink-0 border">
-                      <img src={URL.createObjectURL(img.file)} alt="Preview" className="h-full w-full object-cover" />
+                      <img
+                        src={(img as any).isExisting ? (img as any).previewUrl : URL.createObjectURL(img.file)}
+                        alt="Preview"
+                        className="h-full w-full object-cover"
+                      />
                     </div>
                     <div className="flex-1 space-y-2">
                       <div className="flex justify-between">
@@ -1041,25 +1173,52 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
             )}
           </div>
         </CardContent>
-      </Card>
+      </Card >
 
       {/* Section 8: Remarks */}
-      <Card>
+      < Card >
         <CardHeader>
           <CardTitle>8. Final Remarks</CardTitle>
         </CardHeader>
         <CardContent>
           <Textarea {...register('remarks')} rows={4} placeholder="Overall conclusion, notes for supplier, or specific observations..." />
         </CardContent>
-      </Card>
+      </Card >
 
       {/* Submit Buttons */}
       <div className="flex justify-end gap-4 pt-4 border-t">
         <Button type="button" variant="outline" onClick={handleCancel} className="w-32">Cancel</Button>
-        <Button type="submit" disabled={createMutation.isPending} className="w-48 bg-green-600 hover:bg-green-700">
-          {createMutation.isPending ? 'Submitting Report...' : 'Submit Report'}
-        </Button>
+
+        {inspectionId ? (
+          <>
+            <Button
+              type="submit"
+              disabled={updateMutation.isPending || createMutation.isPending}
+              className="bg-blue-600 hover:bg-blue-700"
+              onClick={() => setSubmitAction('update')}
+            >
+              {updateMutation.isPending ? 'Updating...' : 'Update Report'}
+            </Button>
+            <Button
+              type="submit"
+              disabled={updateMutation.isPending || createMutation.isPending}
+              className="bg-purple-600 hover:bg-purple-700 ml-2"
+              onClick={() => setSubmitAction('saveAsNew')}
+            >
+              {createMutation.isPending ? 'Saving...' : 'Save as New Inspection'}
+            </Button>
+          </>
+        ) : (
+          <Button
+            type="submit"
+            disabled={createMutation.isPending}
+            className="w-48 bg-green-600 hover:bg-green-700"
+            onClick={() => setSubmitAction('create')}
+          >
+            {createMutation.isPending ? 'Submitting Report...' : 'Submit Final Report'}
+          </Button>
+        )}
       </div>
-    </form>
+    </form >
   );
 }
