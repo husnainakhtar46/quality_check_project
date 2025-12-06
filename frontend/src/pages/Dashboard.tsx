@@ -73,6 +73,40 @@ const Dashboard = () => {
         { name: 'Other', Internal: internalCounts.Other, Customer: customerCounts.Other },
     ];
 
+    // ==================== FINAL INSPECTION DATA ====================
+    // 1. Combine Pass/Fail trends into single dataset
+    const fiPassMap = new Map<string, number>();
+    const fiFailMap = new Map<string, number>();
+
+    data?.fi_monthly_pass?.forEach((item: any) => {
+        const key = new Date(item.month).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+        fiPassMap.set(key, item.count);
+    });
+    data?.fi_monthly_fail?.forEach((item: any) => {
+        const key = new Date(item.month).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+        fiFailMap.set(key, item.count);
+    });
+
+    const allMonths = new Set([...fiPassMap.keys(), ...fiFailMap.keys()]);
+    const fiTrendData = Array.from(allMonths).sort().map(month => ({
+        name: month,
+        pass: fiPassMap.get(month) || 0,
+        fail: fiFailMap.get(month) || 0,
+    }));
+
+    // 2. By Customer
+    const fiCustomerData = data?.fi_by_customer?.map((item: any) => ({
+        name: item.customer__name || 'Unknown',
+        pass: item.pass_count || 0,
+        fail: item.fail_count || 0,
+    })) || [];
+
+    // 3. Top Defects
+    const fiDefectsData = data?.fi_top_defects?.map((item: any) => ({
+        name: item.description || 'Unknown',
+        value: item.total || 0,
+    })) || [];
+
     return (
         <div className="space-y-4 md:space-y-6 pb-10">
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Dashboard</h1>
@@ -195,6 +229,88 @@ const Dashboard = () => {
                         </ResponsiveContainer>
                     </CardContent>
                 </Card>
+            </div>
+
+            {/* ==================== FINAL INSPECTION SECTION ==================== */}
+            <div className="border-t-4 border-blue-500 pt-6 mt-8">
+                <h2 className="text-xl md:text-2xl font-bold text-blue-800 mb-4">Final Inspection Analytics</h2>
+
+                {/* FI KPI Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+                    <Card>
+                        <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">Total Final Inspections</CardTitle></CardHeader>
+                        <CardContent><div className="text-2xl font-bold">{data?.fi_total || 0}</div></CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">FI Pass Rate</CardTitle></CardHeader>
+                        <CardContent><div className="text-2xl font-bold text-green-600">{data?.fi_pass_rate || 0}%</div></CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">FI Passed</CardTitle></CardHeader>
+                        <CardContent><div className="text-2xl font-bold text-green-600">{data?.fi_pass || 0}</div></CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">FI Failed</CardTitle></CardHeader>
+                        <CardContent><div className="text-2xl font-bold text-red-600">{data?.fi_fail || 0}</div></CardContent>
+                    </Card>
+                </div>
+
+                {/* FI Charts Row 1: Trend & By Customer */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-6">
+                    {/* 1. Pass/Fail Trend */}
+                    <Card className="h-[400px]">
+                        <CardHeader><CardTitle>Final Inspection Trend (Pass/Fail)</CardTitle></CardHeader>
+                        <CardContent className="h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={fiTrendData}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="name" />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Legend />
+                                    <Line type="monotone" dataKey="pass" stroke="#22c55e" strokeWidth={2} name="Pass" />
+                                    <Line type="monotone" dataKey="fail" stroke="#ef4444" strokeWidth={2} name="Fail" />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+
+                    {/* 2. By Customer */}
+                    <Card className="h-[400px]">
+                        <CardHeader><CardTitle>Final Inspections by Customer</CardTitle></CardHeader>
+                        <CardContent className="h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={fiCustomerData} layout="vertical">
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis type="number" />
+                                    <YAxis dataKey="name" type="category" width={100} />
+                                    <Tooltip />
+                                    <Legend />
+                                    <Bar dataKey="pass" stackId="a" fill="#22c55e" name="Pass" />
+                                    <Bar dataKey="fail" stackId="a" fill="#ef4444" name="Fail" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* FI Charts Row 2: Top Defects */}
+                <div className="grid grid-cols-1 gap-4 md:gap-6">
+                    <Card className="h-[400px]">
+                        <CardHeader><CardTitle>Top Defect Types (Final Inspection)</CardTitle></CardHeader>
+                        <CardContent className="h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={fiDefectsData} layout="vertical">
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis type="number" />
+                                    <YAxis dataKey="name" type="category" width={150} />
+                                    <Tooltip />
+                                    <Bar dataKey="value" fill="#f97316" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
         </div>
     );

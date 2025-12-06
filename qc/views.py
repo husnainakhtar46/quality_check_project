@@ -701,11 +701,12 @@ class FilterPresetViewSet(viewsets.ModelViewSet):
         # Auto-assign the current user when creating a preset
         serializer.save(user=self.request.user)
 
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.db.models.functions import TruncMonth
 
 class DashboardView(APIView):
     def get(self, request):
+        # ==================== EVALUATION ANALYTICS ====================
         total_inspections = Inspection.objects.count()
         pass_count = Inspection.objects.filter(decision="Accepted").count()
         fail_count = Inspection.objects.exclude(decision="Accepted").count()
@@ -725,12 +726,37 @@ class DashboardView(APIView):
         monthly_trend = Inspection.objects.annotate(month=TruncMonth('created_at')).values('month').annotate(count=Count('id')).order_by('month')
 
         # 4. Customer vs Internal Decision
-        # We want to see how often they match or differ, or just counts of each
-        # Let's return counts for both to compare side-by-side or stacked
         internal_decisions = Inspection.objects.values('decision').annotate(count=Count('id'))
         customer_decisions = Inspection.objects.values('customer_decision').annotate(count=Count('id'))
 
+        # ==================== FINAL INSPECTION ANALYTICS ====================
+        fi_total = FinalInspection.objects.count()
+        fi_pass = FinalInspection.objects.filter(result='Pass').count()
+        fi_fail = FinalInspection.objects.filter(result='Fail').count()
+        fi_pass_rate = (fi_pass / fi_total * 100) if fi_total > 0 else 0
+
+        # 1. Pass/Fail Monthly Trend
+        fi_monthly_pass = FinalInspection.objects.filter(result='Pass').annotate(
+            month=TruncMonth('inspection_date')
+        ).values('month').annotate(count=Count('id')).order_by('month')
+        
+        fi_monthly_fail = FinalInspection.objects.filter(result='Fail').annotate(
+            month=TruncMonth('inspection_date')
+        ).values('month').annotate(count=Count('id')).order_by('month')
+
+        # 2. By Customer (Pass/Fail counts)
+        fi_by_customer = FinalInspection.objects.values('customer__name').annotate(
+            pass_count=Count('id', filter=Q(result='Pass')),
+            fail_count=Count('id', filter=Q(result='Fail'))
+        ).order_by('-pass_count')[:10]
+
+        # 3. Top Defect Types
+        fi_top_defects = FinalInspectionDefect.objects.values('description').annotate(
+            total=Count('id')
+        ).order_by('-total')[:10]
+
         return Response({
+            # Evaluation Data
             "total_inspections": total_inspections,
             "pass_count": pass_count,
             "fail_count": fail_count,
@@ -741,6 +767,15 @@ class DashboardView(APIView):
             "monthly_trend": list(monthly_trend),
             "internal_decisions": list(internal_decisions),
             "customer_decisions": list(customer_decisions),
+            # Final Inspection Data
+            "fi_total": fi_total,
+            "fi_pass": fi_pass,
+            "fi_fail": fi_fail,
+            "fi_pass_rate": round(fi_pass_rate, 1),
+            "fi_monthly_pass": list(fi_monthly_pass),
+            "fi_monthly_fail": list(fi_monthly_fail),
+            "fi_by_customer": list(fi_by_customer),
+            "fi_top_defects": list(fi_top_defects),
         })
 
 # ==================== Final Inspection ViewSet ====================
