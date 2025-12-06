@@ -80,7 +80,7 @@ const Dashboard = () => {
             {/* KPI Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
                 <Card>
-                    <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">Total Inspections</CardTitle></CardHeader>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">Total Evaluations</CardTitle></CardHeader>
                     <CardContent><div className="text-2xl font-bold">{data?.total_inspections}</div></CardContent>
                 </Card>
                 <Card>
@@ -119,7 +119,7 @@ const Dashboard = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                 {/* 1. Stage Distribution */}
                 <Card className="h-[400px]">
-                    <CardHeader><CardTitle>Inspections by Stage</CardTitle></CardHeader>
+                    <CardHeader><CardTitle>Evaluations by Stage</CardTitle></CardHeader>
                     <CardContent className="h-[300px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
@@ -145,7 +145,7 @@ const Dashboard = () => {
 
                 {/* 2. Customer Volume */}
                 <Card className="h-[400px]">
-                    <CardHeader><CardTitle>Inspections by Customer</CardTitle></CardHeader>
+                    <CardHeader><CardTitle>Evaluations by Customer</CardTitle></CardHeader>
                     <CardContent className="h-[300px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={customerData} layout="vertical">

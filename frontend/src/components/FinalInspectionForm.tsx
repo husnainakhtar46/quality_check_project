@@ -393,30 +393,58 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
   const isSelected = (index: number, key: string) => selectedCells.has(getCellId(index, key));
 
   // Handle KeyDown (Enter for Navigation, Backspace/Delete for Bulk Clear)
-  const handleCellKeyDown = (e: React.KeyboardEvent, index: number, key: string) => {
+  // sizeMeasurementIndices: array of measurement indices belonging to current size grid
+  const handleCellKeyDown = (e: React.KeyboardEvent, index: number, key: string, sizeMeasurementIndices?: number[]) => {
     // Handle Enter for Navigation
     if (e.key === 'Enter') {
       e.preventDefault();
       const currentColIdx = columnKeys.indexOf(key);
       if (currentColIdx === -1) return;
 
-      // Try moving down (same column, next row)
-      const nextRowIdx = index + 1;
-      if (nextRowIdx < measurementFields.length) {
-        const nextInput = document.querySelector(`input[name="measurements.${nextRowIdx}.${key}"]`) as HTMLInputElement;
-        if (nextInput) {
-          nextInput.focus();
-          nextInput.select();
-        }
-      } else {
-        // If at bottom, move to top of next column
-        const nextColIdx = currentColIdx + 1;
-        if (nextColIdx < columnKeys.length) {
-          const nextColKey = columnKeys[nextColIdx];
-          const nextInput = document.querySelector(`input[name="measurements.0.${nextColKey}"]`) as HTMLInputElement;
+      // If we have size-scoped indices, use them for navigation
+      if (sizeMeasurementIndices && sizeMeasurementIndices.length > 0) {
+        const posInSize = sizeMeasurementIndices.indexOf(index);
+        const nextPosInSize = posInSize + 1;
+
+        if (nextPosInSize < sizeMeasurementIndices.length) {
+          // Move to next row within same size grid
+          const nextIdx = sizeMeasurementIndices[nextPosInSize];
+          const nextInput = document.querySelector(`input[name="measurements.${nextIdx}.${key}"]`) as HTMLInputElement;
           if (nextInput) {
             nextInput.focus();
             nextInput.select();
+          }
+        } else {
+          // At bottom of size grid, wrap to top of next column within same size
+          const nextColIdx = currentColIdx + 1;
+          if (nextColIdx < columnKeys.length) {
+            const nextColKey = columnKeys[nextColIdx];
+            const firstIdx = sizeMeasurementIndices[0];
+            const nextInput = document.querySelector(`input[name="measurements.${firstIdx}.${nextColKey}"]`) as HTMLInputElement;
+            if (nextInput) {
+              nextInput.focus();
+              nextInput.select();
+            }
+          }
+        }
+      } else {
+        // Fallback: global navigation (for non-size-grouped grids)
+        const nextRowIdx = index + 1;
+        if (nextRowIdx < measurementFields.length) {
+          const nextInput = document.querySelector(`input[name="measurements.${nextRowIdx}.${key}"]`) as HTMLInputElement;
+          if (nextInput) {
+            nextInput.focus();
+            nextInput.select();
+          }
+        } else {
+          const nextColIdx = currentColIdx + 1;
+          if (nextColIdx < columnKeys.length) {
+            const nextColKey = columnKeys[nextColIdx];
+            const nextInput = document.querySelector(`input[name="measurements.0.${nextColKey}"]`) as HTMLInputElement;
+            if (nextInput) {
+              nextInput.focus();
+              nextInput.select();
+            }
           }
         }
       }
@@ -720,15 +748,9 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
   return (
     <form onKeyDown={handleKeyDown} onSubmit={handleSubmit(onSubmit)} className="space-y-6 w-full max-w-6xl mx-auto pb-20 px-4 md:px-6 lg:px-8" >
       {/* Header */}
-      < div className="flex justify-between items-center border-b -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8 py-4 mb-4" >
+      <div className="flex justify-between items-center border-b -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8 py-4 mb-4">
         <h2 className="text-xl md:text-2xl font-bold text-gray-800">{inspectionId ? 'Edit Final Inspection' : 'New Final Inspection'}</h2>
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" onClick={handleCancel}>Cancel</Button>
-          <Button type="submit" disabled={createMutation.isPending} className="bg-blue-600 hover:bg-blue-700">
-            {createMutation.isPending ? 'Submitting...' : 'Submit Report'}
-          </Button>
-        </div>
-      </div >
+      </div>
 
       {/* Section 1: General Information */}
       < Card >
@@ -961,6 +983,8 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
 
                         {sizeMeasurements.map(({ field, index }) => {
                           const currentPOM = measurements[index] || {};
+                          // Extract indices for scoped navigation
+                          const sizeMeasurementIndices = sizeMeasurements.map(sm => sm.index);
 
                           return (
                             <div key={field.id} className="min-w-[900px] grid grid-cols-11 gap-2 mb-2 items-center hover:bg-gray-50 p-1 rounded">
@@ -976,7 +1000,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
                                   {...register(`measurements.${index}.spec`)}
                                   className={`h-8 text-center text-sm ${isSelected(index, 'spec') ? 'bg-blue-200 ring-2 ring-blue-500 z-10 relative' : ''}`}
                                   onPaste={handleMeasurementPaste(index, 'spec')}
-                                  onKeyDown={(e) => handleCellKeyDown(e, index, 'spec')}
+                                  onKeyDown={(e) => handleCellKeyDown(e, index, 'spec', sizeMeasurementIndices)}
                                   onMouseDown={() => handleCellMouseDown(index, 'spec')}
                                   onMouseEnter={() => handleCellMouseEnter(index, 'spec')}
                                   onTouchStart={() => handleTouchStart(index, 'spec')}
@@ -1001,7 +1025,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
                                       `}
                                       placeholder="-"
                                       onPaste={handleMeasurementPaste(index, key)}
-                                      onKeyDown={(e) => handleCellKeyDown(e, index, key)}
+                                      onKeyDown={(e) => handleCellKeyDown(e, index, key, sizeMeasurementIndices)}
                                       onMouseDown={() => handleCellMouseDown(index, key)}
                                       onMouseEnter={() => handleCellMouseEnter(index, key)}
                                       onTouchStart={() => handleTouchStart(index, key)}
@@ -1212,7 +1236,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
           <Button
             type="submit"
             disabled={createMutation.isPending}
-            className="w-48 bg-green-600 hover:bg-green-700"
+            className="w-48 bg-blue-600 hover:bg-blue-700"
             onClick={() => setSubmitAction('create')}
           >
             {createMutation.isPending ? 'Submitting Report...' : 'Submit Final Report'}
