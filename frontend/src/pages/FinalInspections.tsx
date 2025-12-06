@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
+import api from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
@@ -10,7 +10,6 @@ import { Download, Plus, Search, Eye, Trash2, FileText } from 'lucide-react';
 import { useToast } from '../components/ui/use-toast';
 import FinalInspectionForm from '../components/FinalInspectionForm';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 interface FinalInspection {
   id: string;
@@ -35,7 +34,6 @@ export default function FinalInspections() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const token = localStorage.getItem('access_token');
 
   // Fetch final inspections
   const { data: inspections, isLoading } = useQuery<FinalInspection[]>({
@@ -44,9 +42,7 @@ export default function FinalInspections() {
       const params = new URLSearchParams();
       if (resultFilter) params.append('result', resultFilter);
 
-      const response = await axios.get(`${API_URL}/final-inspections/?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await api.get(`/final-inspections/?${params}`);
       return response.data;
     },
     staleTime: 0,
@@ -57,9 +53,7 @@ export default function FinalInspections() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await axios.delete(`${API_URL}/final-inspections/${id}/`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await api.delete(`/final-inspections/${id}/`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['finalInspections'] });
@@ -70,12 +64,9 @@ export default function FinalInspections() {
   // Download PDF
   const handleDownloadPDF = async (inspection: FinalInspection) => {
     try {
-      const response = await axios.get(
-        `${API_URL}/final-inspections/${inspection.id}/pdf/`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          responseType: 'blob',
-        }
+      const response = await api.get(
+        `/final-inspections/${inspection.id}/pdf/`,
+        { responseType: 'blob' }
       );
 
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -99,6 +90,16 @@ export default function FinalInspections() {
     (insp.customer_name?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
 
+  // Debug logging
+  console.log('=== FinalInspections Debug ===');
+  console.log('inspections:', inspections);
+  console.log('inspections length:', inspections?.length);
+  console.log('filteredInspections:', filteredInspections);
+  console.log('filteredInspections length:', filteredInspections?.length);
+  console.log('searchTerm:', searchTerm);
+  console.log('isLoading:', isLoading);
+  console.log('resultFilter:', resultFilter);
+
   const getResultBadge = (result: string) => {
     switch (result) {
       case 'Pass':
@@ -109,6 +110,7 @@ export default function FinalInspections() {
         return <Badge variant="secondary">Pending</Badge>;
     }
   };
+
 
   return (
     <div className="space-y-4 md:space-y-6 pb-10">
