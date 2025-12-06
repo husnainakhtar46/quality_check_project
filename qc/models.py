@@ -272,6 +272,19 @@ class FinalInspection(models.Model):
     style_no = models.CharField(max_length=255)
     color = models.CharField(max_length=255, blank=True)
     
+    # Inspection Attempt Tracking
+    INSPECTION_ATTEMPT_CHOICES = [
+        ('1st', '1st Inspection'),
+        ('2nd', '2nd Inspection'),
+        ('3rd', '3rd Inspection'),
+    ]
+    inspection_attempt = models.CharField(
+        max_length=20,
+        choices=INSPECTION_ATTEMPT_CHOICES,
+        default='1st',
+        help_text='Inspection attempt number for this order'
+    )
+    
     # Quantities
     total_order_qty = models.PositiveIntegerField(default=0)
     presented_qty = models.PositiveIntegerField(default=0)

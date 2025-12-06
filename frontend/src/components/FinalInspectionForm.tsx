@@ -68,6 +68,7 @@ interface FormData {
   order_no: string;
   style_no: string;
   color: string;
+  inspection_attempt: '1st' | '2nd' | '3rd';
   aql_standard: 'strict' | 'standard';
   total_order_qty: number;
   presented_qty: number;
@@ -134,6 +135,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
   const { register, control, handleSubmit, watch, setValue, getValues } = useForm<FormData>({
     defaultValues: {
       inspection_date: new Date().toISOString().split('T')[0],
+      inspection_attempt: '1st',
       aql_standard: 'standard',
       sample_size: 0,
       total_order_qty: 0,
@@ -568,16 +570,32 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
   });
 
   const onSubmit = (data: FormData) => {
-    createMutation.mutate(data);
+    if (confirm('Are you confirmed to Submit?')) {
+      createMutation.mutate(data);
+    }
+  };
+
+  // Prevent Enter key from submitting/closing, except in textareas
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
+      e.preventDefault();
+    }
+  };
+
+  const handleCancel = () => {
+    if (confirm('Are you confirmed to cancel?')) {
+      onClose();
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 w-full max-w-6xl mx-auto pb-20 px-4 md:px-6 lg:px-8">
+    <form onKeyDown={handleKeyDown} onSubmit={handleSubmit(onSubmit)} className="space-y-6 w-full max-w-6xl mx-auto pb-20 px-4 md:px-6 lg:px-8">
       {/* Header */}
-      <div className="flex justify-between items-center sticky top-0 bg-white z-20 p-4 shadow-sm border-b -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8">
+      <div className="flex justify-between items-center border-b -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8 py-4 mb-4">
         <h2 className="text-xl md:text-2xl font-bold text-gray-800">{inspectionId ? 'Edit Final Inspection' : 'New Final Inspection'}</h2>
         <div className="flex gap-2">
-          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button type="button" variant="outline" onClick={handleCancel}>Cancel</Button>
           <Button type="submit" disabled={createMutation.isPending} className="bg-blue-600 hover:bg-blue-700">
             {createMutation.isPending ? 'Submitting...' : 'Submit Report'}
           </Button>
@@ -619,6 +637,14 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
           <div>
             <Label>Color</Label>
             <Input {...register('color')} placeholder="Navy Blue" className="mt-1" />
+          </div>
+          <div>
+            <Label>Inspection Attempt</Label>
+            <select {...register('inspection_attempt')} className="w-full border rounded p-2 mt-1">
+              <option value="1st">1st Inspection</option>
+              <option value="2nd">2nd Inspection</option>
+              <option value="3rd">3rd Inspection</option>
+            </select>
           </div>
 
           {/* AQL Setup Block */}
@@ -945,7 +971,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
                 type="file"
                 multiple
                 accept="image/*"
-                    capture="environment"
+                capture="environment"
                 onChange={handleImageUpload}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
@@ -1029,9 +1055,9 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
 
       {/* Submit Buttons */}
       <div className="flex justify-end gap-4 pt-4 border-t">
-        <Button type="button" variant="outline" onClick={onClose} className="w-32">Cancel</Button>
+        <Button type="button" variant="outline" onClick={handleCancel} className="w-32">Cancel</Button>
         <Button type="submit" disabled={createMutation.isPending} className="w-48 bg-green-600 hover:bg-green-700">
-          {createMutation.isPending ? 'Submitting Report...' : 'Submit Final Report'}
+          {createMutation.isPending ? 'Submitting Report...' : 'Submit Report'}
         </Button>
       </div>
     </form>

@@ -173,7 +173,7 @@ class FinalInspectionListSerializer(serializers.ModelSerializer):
     class Meta:
         model = FinalInspection
         fields = [
-            'id', 'order_no', 'style_no', 'color', 'customer', 'customer_name',
+            'id', 'order_no', 'style_no', 'color', 'inspection_attempt', 'customer', 'customer_name',
             'inspection_date', 'result', 'total_order_qty', 'sample_size',
             'created_at', 'created_by_username'
         ]
@@ -198,7 +198,7 @@ class FinalInspectionSerializer(serializers.ModelSerializer):
         model = FinalInspection
         fields = [
             'id', 'customer', 'customer_name', 'supplier', 'factory',
-            'inspection_date', 'order_no', 'style_no', 'color',
+            'inspection_date', 'order_no', 'style_no', 'color', 'inspection_attempt',
             'total_order_qty', 'presented_qty', 'sample_size',
             'aql_standard', 'aql_critical', 'aql_major', 'aql_minor',
             'critical_found', 'major_found', 'minor_found',
