@@ -51,10 +51,13 @@ const InspectionFilters: React.FC<InspectionFiltersProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Fetch customers for filter dropdown
-  const { data: customers } = useQuery({
+  const { data: customersData } = useQuery({
     queryKey: ['customers'],
     queryFn: async () => (await api.get('/customers/')).data,
   });
+
+  // Handle both paginated and non-paginated responses
+  const customers = Array.isArray(customersData) ? customersData : customersData?.results || [];
 
   const updateFilter = (key: string, value: any) => {
     onFiltersChange({ ...filters, [key]: value });

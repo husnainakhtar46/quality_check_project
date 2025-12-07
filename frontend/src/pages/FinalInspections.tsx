@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Download, Plus, Search, Pencil, Trash2, FileText } from 'lucide-react';
 import { useToast } from '../components/ui/use-toast';
 import FinalInspectionForm from '../components/FinalInspectionForm';
+import Pagination from '../components/Pagination';
 
 
 interface FinalInspection {
@@ -27,20 +28,29 @@ interface FinalInspection {
   created_by_username?: string;
 }
 
+interface PaginatedResponse<T> {
+  results: T[];
+  count: number;
+  next: string | null;
+  previous: string | null;
+}
+
 export default function FinalInspections() {
   const [searchTerm, setSearchTerm] = useState('');
   const [resultFilter, setResultFilter] = useState<string>('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedInspection, setSelectedInspection] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
 
-  // Fetch final inspections
-  const { data: inspections, isLoading } = useQuery<FinalInspection[]>({
-    queryKey: ['finalInspections', resultFilter],
+  // Fetch final inspections with pagination
+  const { data: inspectionData, isLoading, isPlaceholderData } = useQuery<PaginatedResponse<FinalInspection>>({
+    queryKey: ['finalInspections', resultFilter, page],
     queryFn: async () => {
       const params = new URLSearchParams();
+      params.append('page', page.toString());
       if (resultFilter) params.append('result', resultFilter);
 
       const response = await api.get(`/final-inspections/?${params}`);
@@ -49,7 +59,11 @@ export default function FinalInspections() {
     staleTime: 0,
     gcTime: 0,
     refetchOnMount: 'always',
+    placeholderData: (previousData) => previousData,
   });
+
+  // Extract inspections from paginated response
+  const inspections = inspectionData?.results || [];
 
   // Delete mutation
   const deleteMutation = useMutation({
@@ -217,6 +231,19 @@ export default function FinalInspections() {
           </Card>
         )}
       </div>
+
+      {/* Pagination */}
+      {!isLoading && inspections.length > 0 && (
+        <Pagination
+          page={page}
+          hasNext={!!inspectionData?.next}
+          hasPrevious={!!inspectionData?.previous}
+          onPageChange={(newPage) => setPage(newPage)}
+          isLoading={isPlaceholderData}
+          totalCount={inspectionData?.count}
+          pageSize={10}
+        />
+      )}
 
       {/* Form Dialog */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>

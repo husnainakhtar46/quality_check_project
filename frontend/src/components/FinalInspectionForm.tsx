@@ -8,10 +8,18 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
-import { Badge } from './ui/badge';
-import { Plus, Minus, Trash2, Upload, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, AlertCircle } from 'lucide-react';
 import { useToast } from './ui/use-toast';
 import { COMMON_DEFECTS } from '../lib/aqlCalculations';
+import {
+  AQLResultCard,
+  DefectCounter,
+  ImageUploader,
+  ShipmentDetails,
+  UploadedImage,
+  DefectCounts,
+  ServerCalculations,
+} from './inspection';
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:8000';
 
@@ -90,8 +98,8 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
   const queryClient = useQueryClient();
   const token = localStorage.getItem('access_token');
 
-  const [defectCounts, setDefectCounts] = useState<Record<string, { critical: number; major: number; minor: number }>>(() => {
-    const initial: Record<string, { critical: number; major: number; minor: number }> = {};
+  const [defectCounts, setDefectCounts] = useState<DefectCounts>(() => {
+    const initial: DefectCounts = {};
     COMMON_DEFECTS.forEach(defect => {
       initial[defect] = { critical: 0, major: 0, minor: 0 };
     });
@@ -99,7 +107,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
   });
 
   const [customDefect, setCustomDefect] = useState('');
-  const [uploadedImages, setUploadedImages] = useState<Array<{ file: File; caption: string; category: string }>>([]);
+  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   // --- Grid Selection & Paste State ---
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
   const [isDragSelecting, setIsDragSelecting] = useState(false);
@@ -110,7 +118,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
 
   // --- Queries ---
 
-  const { data: customers } = useQuery<Customer[]>({
+  const { data: customersData } = useQuery({
     queryKey: ['customers'],
     queryFn: async () => {
       const response = await axios.get(`${API_URL}/customers/`, {
@@ -120,7 +128,10 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
     },
   });
 
-  const { data: templates } = useQuery<Template[]>({
+  // Handle paginated response for customers
+  const customers: Customer[] = Array.isArray(customersData) ? customersData : customersData?.results || [];
+
+  const { data: templatesData } = useQuery({
     queryKey: ['templates'],
     queryFn: async () => {
       const response = await axios.get(`${API_URL}/templates/`, {
@@ -130,7 +141,10 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
     },
   });
 
-  const { data: inspectionData, isLoading: isLoadingInspection } = useQuery({
+  // Handle paginated response for templates
+  const templates: Template[] = Array.isArray(templatesData) ? templatesData : templatesData?.results || [];
+
+  const { data: inspectionData } = useQuery({
     queryKey: ['finalInspection', inspectionId],
     queryFn: async () => {
       if (!inspectionId) return null;
@@ -177,7 +191,6 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
 
   // --- Watchers ---
   const presentedQty = watch('presented_qty');
-  const sampleSize = watch('sample_size');
   const aqlStandard = watch('aql_standard');
   const selectedTemplateId = watch('template');
   const measurements = watch('measurements');
@@ -221,7 +234,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
 
       // 3. Set Images
       if (inspectionData.images) {
-        setUploadedImages(inspectionData.images.map((img: any) => ({
+        setUploadedImages(inspectionData.images.map((img: { image: string; caption: string; category: string; id: string }) => ({
           file: new File([], "existing_image"), // Placeholder
           previewUrl: img.image.startsWith('http') ? img.image : `${API_URL}${img.image}`, // Fix URL
           caption: img.caption,
@@ -326,7 +339,7 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
   const { critical, major, minor } = getTotalDefects();
 
   // State for Server-Side Calculations
-  const [serverCalcs, setServerCalcs] = useState({
+  const [serverCalcs, setServerCalcs] = useState<ServerCalculations>({
     sampleSize: 0,
     maxCritical: 0,
     maxMajor: 0,
@@ -594,18 +607,6 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files) {
-      const newImages = Array.from(files).map(file => ({
-        file,
-        caption: '',
-        category: 'General',
-      }));
-      setUploadedImages(prev => [...prev, ...newImages]);
-    }
-  };
-
   // Submit form
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
@@ -829,56 +830,12 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
       </Card >
 
       {/* Section 2: AQL Status */}
-      < Card className="border-t-4 border-t-blue-600" >
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle>2. AQL Result (Server Verified)</CardTitle>
-          <Badge
-            className={serverCalcs.result === 'Pass' ? 'bg-green-600' : 'bg-red-600'}
-            style={{ fontSize: '1.2rem', padding: '0.5rem 1.5rem' }}
-          >
-            {serverCalcs.result.toUpperCase()}
-          </Badge>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Critical Card */}
-            <div className={`p-4 rounded-lg border-2 transition-all ${critical > serverCalcs.maxCritical ? 'border-red-500 bg-red-50' : 'border-gray-200'}`}>
-              <div className="flex justify-between mb-2">
-                <span className="font-semibold text-gray-700">Critical</span>
-                <span className="text-xs font-mono bg-gray-200 px-2 py-1 rounded">Max: {serverCalcs.maxCritical}</span>
-              </div>
-              <div className="text-4xl font-bold text-gray-900">{critical}</div>
-              <p className={`text-xs mt-1 font-bold ${critical > serverCalcs.maxCritical ? 'text-red-600' : 'text-green-600'}`}>
-                {critical > serverCalcs.maxCritical ? 'FAILED' : 'WITHIN LIMIT'}
-              </p>
-            </div>
-
-            {/* Major Card */}
-            <div className={`p-4 rounded-lg border-2 transition-all ${major > serverCalcs.maxMajor ? 'border-red-500 bg-red-50' : 'border-gray-200'}`}>
-              <div className="flex justify-between mb-2">
-                <span className="font-semibold text-gray-700">Major</span>
-                <span className="text-xs font-mono bg-gray-200 px-2 py-1 rounded">Max: {serverCalcs.maxMajor}</span>
-              </div>
-              <div className="text-4xl font-bold text-gray-900">{major}</div>
-              <p className={`text-xs mt-1 font-bold ${major > serverCalcs.maxMajor ? 'text-red-600' : 'text-green-600'}`}>
-                {major > serverCalcs.maxMajor ? 'FAILED' : 'WITHIN LIMIT'}
-              </p>
-            </div>
-
-            {/* Minor Card */}
-            <div className={`p-4 rounded-lg border-2 transition-all ${minor > serverCalcs.maxMinor ? 'border-red-500 bg-red-50' : 'border-gray-200'}`}>
-              <div className="flex justify-between mb-2">
-                <span className="font-semibold text-gray-700">Minor</span>
-                <span className="text-xs font-mono bg-gray-200 px-2 py-1 rounded">Max: {serverCalcs.maxMinor}</span>
-              </div>
-              <div className="text-4xl font-bold text-gray-900">{minor}</div>
-              <p className={`text-xs mt-1 font-bold ${minor > serverCalcs.maxMinor ? 'text-red-600' : 'text-green-600'}`}>
-                {minor > serverCalcs.maxMinor ? 'FAILED' : 'WITHIN LIMIT'}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card >
+      <AQLResultCard
+        serverCalcs={serverCalcs}
+        critical={critical}
+        major={major}
+        minor={minor}
+      />
 
       {/* Section 3: Quantity Breakdown */}
       < Card >
@@ -1049,155 +1006,22 @@ export default function FinalInspectionForm({ inspectionId, onClose }: FinalInsp
       </Card >
 
       {/* Section 5: Defect Breakdown */}
-      < Card >
-        <CardHeader>
-          <CardTitle>5. Defect Breakdown</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {Object.keys(defectCounts).map(defect => (
-            <div key={defect} className="flex flex-col md:flex-row md:items-center justify-between gap-2 p-3 bg-white border rounded hover:shadow-sm transition-all">
-              <span className="font-medium flex-1 text-gray-700">{defect}</span>
-              <div className="flex gap-4">
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] text-red-600 w-10 font-bold uppercase">Critical</span>
-                  <Button type="button" size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => updateDefectCount(defect, 'critical', -1)}><Minus className="h-3 w-3" /></Button>
-                  <span className="w-6 text-center font-bold">{defectCounts[defect].critical}</span>
-                  <Button type="button" size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => updateDefectCount(defect, 'critical', 1)}><Plus className="h-3 w-3" /></Button>
-                </div>
-                <div className="w-px bg-gray-200 h-6 mx-1"></div>
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] text-orange-600 w-10 font-bold uppercase">Major</span>
-                  <Button type="button" size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => updateDefectCount(defect, 'major', -1)}><Minus className="h-3 w-3" /></Button>
-                  <span className="w-6 text-center font-bold">{defectCounts[defect].major}</span>
-                  <Button type="button" size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => updateDefectCount(defect, 'major', 1)}><Plus className="h-3 w-3" /></Button>
-                </div>
-                <div className="w-px bg-gray-200 h-6 mx-1"></div>
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] text-gray-600 w-10 font-bold uppercase">Minor</span>
-                  <Button type="button" size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => updateDefectCount(defect, 'minor', -1)}><Minus className="h-3 w-3" /></Button>
-                  <span className="w-6 text-center font-bold">{defectCounts[defect].minor}</span>
-                  <Button type="button" size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => updateDefectCount(defect, 'minor', 1)}><Plus className="h-3 w-3" /></Button>
-                </div>
-              </div>
-            </div>
-          ))}
-          <div className="flex gap-2 mt-4 pt-4 border-t">
-            <Input
-              placeholder="Add custom defect type..."
-              value={customDefect}
-              onChange={(e) => setCustomDefect(e.target.value)}
-            />
-            <Button type="button" onClick={addCustomDefect} variant="secondary">Add</Button>
-          </div>
-        </CardContent>
-      </Card >
+      <DefectCounter
+        defectCounts={defectCounts}
+        onUpdateCount={updateDefectCount}
+        customDefect={customDefect}
+        onCustomDefectChange={setCustomDefect}
+        onAddCustomDefect={addCustomDefect}
+      />
 
       {/* Section 6: Shipment Details */}
-      < Card >
-        <CardHeader>
-          <CardTitle>6. Shipment Details</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div><Label>Total Cartons</Label><Input type="number" {...register('total_cartons', { valueAsNumber: true })} className="mt-1" /></div>
-          <div><Label>Selected Cartons</Label><Input type="number" {...register('selected_cartons', { valueAsNumber: true })} className="mt-1" /></div>
-          <div><Label>Gross Weight (kg)</Label><Input type="number" step="0.1" {...register('gross_weight', { valueAsNumber: true })} className="mt-1" /></div>
-          <div><Label>Net Weight (kg)</Label><Input type="number" step="0.1" {...register('net_weight', { valueAsNumber: true })} className="mt-1" /></div>
-          <div className="col-span-1 md:col-span-2 grid grid-cols-3 gap-2">
-            <div className="col-span-3 mb-1 text-sm font-medium">Carton Dimensions (cm)</div>
-            <Input placeholder="L" type="number" step="0.1" {...register('carton_length', { valueAsNumber: true })} />
-            <Input placeholder="W" type="number" step="0.1" {...register('carton_width', { valueAsNumber: true })} />
-            <Input placeholder="H" type="number" step="0.1" {...register('carton_height', { valueAsNumber: true })} />
-          </div>
-        </CardContent>
-      </Card >
+      <ShipmentDetails register={register} />
 
       {/* Section 7: Photo Evidence */}
-      < Card >
-        <CardHeader>
-          <CardTitle>7. Photo Evidence</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:bg-gray-50 transition-colors cursor-pointer relative">
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                capture="environment"
-                onChange={handleImageUpload}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              />
-              <div className="flex flex-col items-center gap-2">
-                <Upload className="h-10 w-10 text-gray-400" />
-                <p className="text-sm text-gray-600 font-medium">Click to upload or drag and drop</p>
-                <p className="text-xs text-gray-400">JPG, PNG (Max 10MB)</p>
-              </div>
-            </div>
-
-            {uploadedImages.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                {uploadedImages.map((img, idx) => (
-                  <div key={idx} className="flex gap-3 p-3 bg-white border rounded shadow-sm items-start">
-                    <div className="h-24 w-24 bg-gray-100 rounded overflow-hidden flex-shrink-0 border">
-                      <img
-                        src={(img as any).isExisting ? (img as any).previewUrl : URL.createObjectURL(img.file)}
-                        alt="Preview"
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                    <div className="flex-1 space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-xs text-gray-500 font-mono truncate max-w-[150px]">{img.file.name}</span>
-                        <span className="text-xs font-bold text-blue-600">{img.category}</span>
-                      </div>
-
-                      <select
-                        value={img.category}
-                        onChange={(e) => {
-                          const newImages = [...uploadedImages];
-                          newImages[idx].category = e.target.value;
-                          setUploadedImages(newImages);
-                        }}
-                        className="w-full border rounded p-1 text-sm h-8 bg-white"
-                      >
-                        <option value="General">General / Packaging</option>
-                        <option value="Labeling">Labeling / Marking</option>
-                        <option value="Defect">Defect Evidence</option>
-                        <option value="Measurement">Measurement</option>
-                        <option value="On-Site Test">On-Site Test</option>
-                      </select>
-
-                      <Input
-                        placeholder="Enter caption..."
-                        value={img.caption}
-                        onChange={(e) => {
-                          const newImages = [...uploadedImages];
-                          newImages[idx].caption = e.target.value;
-                          setUploadedImages(newImages);
-                        }}
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        const newImages = [...uploadedImages];
-                        newImages.splice(idx, 1);
-                        setUploadedImages(newImages);
-                      }}
-                      className="self-center"
-                    >
-                      <Trash2 className="h-4 w-4 text-red-400 hover:text-red-600" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card >
+      <ImageUploader
+        uploadedImages={uploadedImages}
+        onImagesChange={setUploadedImages}
+      />
 
       {/* Section 8: Remarks */}
       < Card >

@@ -4,6 +4,7 @@ import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
+import Pagination from '../components/Pagination';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -34,9 +35,17 @@ type CustomerForm = {
     emails: EmailContact[];
 };
 
+interface PaginatedResponse<T> {
+    results: T[];
+    count: number;
+    next: string | null;
+    previous: string | null;
+}
+
 const Customers = () => {
     const queryClient = useQueryClient();
     const [isOpen, setIsOpen] = useState(false);
+    const [page, setPage] = useState(1);
 
     const { register, control, handleSubmit, reset, formState: { errors } } = useForm<CustomerForm>({
         defaultValues: {
@@ -50,13 +59,18 @@ const Customers = () => {
         name: "emails"
     });
 
-    const { data: customers, isLoading } = useQuery({
-        queryKey: ['customers'],
+    const { data: customersData, isLoading, isPlaceholderData } = useQuery<PaginatedResponse<any>>({
+        queryKey: ['customers', page],
         queryFn: async () => {
-            const res = await api.get('/customers/');
+            const params = new URLSearchParams();
+            params.append('page', page.toString());
+            const res = await api.get(`/customers/?${params.toString()}`);
             return res.data;
         },
+        placeholderData: (previousData) => previousData,
     });
+
+    const customers = customersData?.results || [];
 
     const createMutation = useMutation({
         mutationFn: async (data: CustomerForm) => {
@@ -280,6 +294,19 @@ const Customers = () => {
                         ))}
                     </TableBody>
                 </Table>
+
+                {/* Pagination */}
+                {!isLoading && customers.length > 0 && (
+                    <Pagination
+                        page={page}
+                        hasNext={!!customersData?.next}
+                        hasPrevious={!!customersData?.previous}
+                        onPageChange={(newPage) => setPage(newPage)}
+                        isLoading={isPlaceholderData}
+                        totalCount={customersData?.count}
+                        pageSize={10}
+                    />
+                )}
             </div>
         </div>
     );

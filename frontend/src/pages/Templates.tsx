@@ -4,6 +4,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { Plus, Trash2, Edit } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
+import Pagination from '../components/Pagination';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -43,11 +44,19 @@ type TemplateForm = {
     poms: POM[];
 };
 
+interface PaginatedResponse<T> {
+    results: T[];
+    count: number;
+    next: string | null;
+    previous: string | null;
+}
+
 const Templates = () => {
     const queryClient = useQueryClient();
     const [isOpen, setIsOpen] = useState(false);
     const [editingTemplate, setEditingTemplate] = useState<any>(null);
     const [selectedCustomer, setSelectedCustomer] = useState<string>('all');
+    const [page, setPage] = useState(1);
 
     const { register, control, handleSubmit, reset, getValues, setValue } = useForm<TemplateForm>({
         defaultValues: {
@@ -110,16 +119,18 @@ const Templates = () => {
         }
     };
 
-    const { data: templatesData, isLoading } = useQuery({
-        queryKey: ['templates', selectedCustomer],
+    const { data: templatesData, isLoading, isPlaceholderData } = useQuery<PaginatedResponse<any>>({
+        queryKey: ['templates', selectedCustomer, page],
         queryFn: async () => {
             const params = new URLSearchParams();
+            params.append('page', page.toString());
             if (selectedCustomer && selectedCustomer !== 'all') {
                 params.append('customer', selectedCustomer);
             }
             const res = await api.get(`/templates/?${params.toString()}`);
             return res.data;
         },
+        placeholderData: (previousData) => previousData,
     });
 
     const { data: customersData } = useQuery({
@@ -368,6 +379,19 @@ const Templates = () => {
                         ))}
                     </TableBody>
                 </Table>
+
+                {/* Pagination */}
+                {!isLoading && templates.length > 0 && (
+                    <Pagination
+                        page={page}
+                        hasNext={!!templatesData?.next}
+                        hasPrevious={!!templatesData?.previous}
+                        onPageChange={(newPage) => setPage(newPage)}
+                        isLoading={isPlaceholderData}
+                        totalCount={templatesData?.count}
+                        pageSize={10}
+                    />
+                )}
             </div>
         </div>
     );

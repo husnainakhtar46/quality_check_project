@@ -25,10 +25,13 @@ const FilterPresets: React.FC<FilterPresetsProps> = ({
   const [presetDescription, setPresetDescription] = React.useState('');
 
   // Fetch user's filter presets
-  const { data: presets } = useQuery({
+  const { data: presetsData } = useQuery({
     queryKey: ['filter-presets'],
     queryFn: async () => (await api.get('/filter-presets/')).data,
   });
+
+  // Handle paginated response
+  const presets: FilterPreset[] = Array.isArray(presetsData) ? presetsData : presetsData?.results || [];
 
   // Save new preset
   const savePresetMutation = useMutation({
@@ -63,7 +66,7 @@ const FilterPresets: React.FC<FilterPresetsProps> = ({
   return (
     <div className="space-y-3">
       <label className="block text-sm font-semibold text-gray-700">Filter Presets</label>
-      
+
       {/* Load Preset */}
       {presets && presets.length > 0 && (
         <select
@@ -91,7 +94,7 @@ const FilterPresets: React.FC<FilterPresetsProps> = ({
         >
           💾 Save Current Filters
         </button>
-        
+
         {presets && presets.length > 0 && (
           <select
             className="px-3 py-2 border border-red-300 text-red-600 rounded-md hover:bg-red-50 text-sm"

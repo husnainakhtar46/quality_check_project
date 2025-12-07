@@ -87,8 +87,18 @@ class InspectionCopySerializer(serializers.ModelSerializer):
         model = Inspection
         fields = [
             "id","style","color","po_number","stage","template","customer",
-            "customer_remarks", "qa_fit_comments", "qa_workmanship_comments", 
+            # Customer Comments by Category
+            "customer_remarks", "customer_fit_comments", "customer_workmanship_comments",
+            "customer_wash_comments", "customer_fabric_comments", "customer_accessories_comments",
+            "customer_comments_addressed",
+            # QA Comments by Category
+            "qa_fit_comments", "qa_workmanship_comments", 
             "qa_wash_comments", "qa_fabric_comments", "qa_accessories_comments",
+            # Fabric Checks
+            "fabric_handfeel", "fabric_pilling",
+            # Dynamic Accessories
+            "accessories_data",
+            # General
             "remarks","decision","created_at","measurements",
             "customer_decision", "customer_feedback_comments", "customer_feedback_date"
         ]
@@ -102,8 +112,18 @@ class InspectionSerializer(serializers.ModelSerializer):
         model = Inspection
         fields = [
             "id","style","color","po_number","stage","template","customer",
-            "customer_remarks", "qa_fit_comments", "qa_workmanship_comments", 
+            # Customer Comments by Category
+            "customer_remarks", "customer_fit_comments", "customer_workmanship_comments",
+            "customer_wash_comments", "customer_fabric_comments", "customer_accessories_comments",
+            "customer_comments_addressed",
+            # QA Comments by Category
+            "qa_fit_comments", "qa_workmanship_comments", 
             "qa_wash_comments", "qa_fabric_comments", "qa_accessories_comments",
+            # Fabric Checks
+            "fabric_handfeel", "fabric_pilling",
+            # Dynamic Accessories
+            "accessories_data",
+            # General
             "remarks","decision","created_at","measurements","images",
             "created_by_username",
             "customer_decision", "customer_feedback_comments", "customer_feedback_date"

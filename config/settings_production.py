@@ -1,8 +1,27 @@
 from .settings import *
 import os
+from django.core.exceptions import ImproperlyConfigured
+
+
+def get_required_env(var_name):
+    """
+    Get a required environment variable or raise an error.
+    
+    In production, the app should fail fast if critical config is missing,
+    rather than silently using insecure defaults.
+    """
+    value = os.environ.get(var_name)
+    if not value:
+        raise ImproperlyConfigured(
+            f"Required environment variable '{var_name}' is not set. "
+            f"Set this variable before starting the production server."
+        )
+    return value
+
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY', 'fallback-secret-key-change-in-production')
+# App will crash on startup if not set - this is intentional for security
+SECRET_KEY = get_required_env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
@@ -17,16 +36,17 @@ ALLOWED_HOSTS = [
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'HOST': os.environ.get('DB_HOST'),
+        'HOST': get_required_env('DB_HOST'),
         'PORT': os.environ.get('DB_PORT', 5432),
-        'NAME': os.environ.get('DB_NAME'),
-        'USER': os.environ.get('DB_USER'),
-        'PASSWORD': os.environ.get('DB_PASSWORD'),
+        'NAME': get_required_env('DB_NAME'),
+        'USER': get_required_env('DB_USER'),
+        'PASSWORD': get_required_env('DB_PASSWORD'),
         'OPTIONS': {
             'sslmode': 'require',
         }
     }
 }
+
 
 # Static files with WhiteNoise
 MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')

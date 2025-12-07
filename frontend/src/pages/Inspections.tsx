@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { FileText, Mail, Trash2, Search, Copy, Loader2, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { FileText, Mail, Trash2, Search, Copy, Loader2, ChevronLeft, ChevronRight, Plus, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
 import { Button } from '../components/ui/button';
@@ -38,7 +38,6 @@ type ImageSlot = {
     caption: string;
 };
 
-// Explicitly define what a Measurement looks like so TypeScript doesn't complain
 type Measurement = {
     pom_name: string;
     tol: number | string;
@@ -49,6 +48,18 @@ type Measurement = {
     s4: number | string;
     s5: number | string;
 };
+
+type AccessoryItem = {
+    name: string;
+    status: 'OK' | 'Not OK' | 'N/A';
+    comment: string;
+};
+
+// Common accessory presets
+const ACCESSORY_PRESETS = [
+    'Zipper', 'Thread', 'Button', 'Care Label', 'Tags', 'Hangtag',
+    'Drawstring', 'Elastic', 'Velcro', 'Snap', 'Hook & Eye', 'Rivet'
+];
 
 const Inspections = () => {
     const queryClient = useQueryClient();
@@ -86,16 +97,33 @@ const Inspections = () => {
             style: '', color: '', po_number: '', stage: 'Proto',
             customer: '', template: '',
 
+            // Customer Comments by Category (Previous Feedback)
             customer_remarks: '',
-            qa_fit_comments: '', qa_workmanship_comments: '', qa_wash_comments: '', qa_fabric_comments: '', qa_accessories_comments: '',
-            remarks: '',
+            customer_fit_comments: '',
+            customer_workmanship_comments: '',
+            customer_wash_comments: '',
+            customer_fabric_comments: '',
+            customer_accessories_comments: '',
+            customer_comments_addressed: false,
 
+            // QA Comments by Category
+            qa_fit_comments: '', qa_workmanship_comments: '', qa_wash_comments: '', qa_fabric_comments: '', qa_accessories_comments: '',
+
+            // Fabric Checks
+            fabric_handfeel: 'OK',
+            fabric_pilling: 'None',
+
+            // Dynamic Accessories
+            accessories_data: [] as AccessoryItem[],
+
+            remarks: '',
             decision: '',
             measurements: [] as Measurement[],
         }
     });
 
     const { fields, replace } = useFieldArray({ control, name: "measurements" });
+    const { fields: accFields, append: appendAcc, remove: removeAcc } = useFieldArray({ control, name: "accessories_data" });
 
     // --- Selection & Bulk Delete Logic ---
     const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
@@ -106,12 +134,12 @@ const Inspections = () => {
     const getCellId = (r: number, k: string) => `${r}-${k}`;
 
     // Handle Delete/Backspace
-        // Handle KeyDown (Enter for Navigation, Backspace/Delete for Bulk Clear)
+    // Handle KeyDown (Enter for Navigation, Backspace/Delete for Bulk Clear)
     const handleCellKeyDown = (e: React.KeyboardEvent, index: number, key: string) => {
         // Handle Enter for Navigation
         if (e.key === 'Enter') {
             e.preventDefault(); // Prevent form submission
-            
+
             const currentColIdx = columnKeys.indexOf(key);
             if (currentColIdx === -1) return;
 
@@ -145,11 +173,11 @@ const Inspections = () => {
                 // Only prevent default if we are actually clearing multiple cells or the cell is in selection
                 // But for safety to avoid navigating back, we prevent default if selection exists
                 if (selectedCells.has(getCellId(index, key)) || selectedCells.size > 0) {
-                     // If it's just a single cursor in a cell without range selection, we might want to allow normal backspace?
-                     // But the user asked for "bulk delete". 
-                     // Let's keep existing logic: if selection > 0, clear all.
-                     e.preventDefault(); 
-                    
+                    // If it's just a single cursor in a cell without range selection, we might want to allow normal backspace?
+                    // But the user asked for "bulk delete". 
+                    // Let's keep existing logic: if selection > 0, clear all.
+                    e.preventDefault();
+
                     let count = 0;
                     selectedCells.forEach(cellId => {
                         const [rStr, k] = cellId.split('-');
@@ -157,7 +185,7 @@ const Inspections = () => {
                         setValue(`measurements.${r}.${k}` as any, '');
                         count++;
                     });
-                    
+
                     if (count > 0) {
                         toast.success(`Cleared ${count} cells`);
                     }
@@ -170,10 +198,10 @@ const Inspections = () => {
     const handleCellMouseDown = (index: number, key: string) => {
         const cIndex = columnKeys.indexOf(key);
         if (cIndex === -1) return;
-        
+
         setIsDragSelecting(true);
         setDragStart({ r: index, c: cIndex });
-        
+
         // If Ctrl is not held, start new selection
         // For simplicity, always start new selection on drag start
         setSelectedCells(new Set([getCellId(index, key)]));
@@ -216,7 +244,7 @@ const Inspections = () => {
 
     // Mobile: Long Press Logic
     const longPressTimer = useRef<NodeJS.Timeout | null>(null);
-    
+
     const handleTouchStart = (index: number, key: string) => {
         longPressTimer.current = setTimeout(() => {
             // Trigger selection
@@ -313,12 +341,29 @@ const Inspections = () => {
                 customer: data.customer || '',
                 template: data.template || '',
 
+                // Customer Comments by Category
                 customer_remarks: data.customer_remarks || '',
+                customer_fit_comments: data.customer_fit_comments || '',
+                customer_workmanship_comments: data.customer_workmanship_comments || '',
+                customer_wash_comments: data.customer_wash_comments || '',
+                customer_fabric_comments: data.customer_fabric_comments || '',
+                customer_accessories_comments: data.customer_accessories_comments || '',
+                customer_comments_addressed: data.customer_comments_addressed || false,
+
+                // QA Comments
                 qa_fit_comments: data.qa_fit_comments || '',
                 qa_workmanship_comments: data.qa_workmanship_comments || '',
                 qa_wash_comments: data.qa_wash_comments || '',
                 qa_fabric_comments: data.qa_fabric_comments || '',
                 qa_accessories_comments: data.qa_accessories_comments || '',
+
+                // Fabric Checks
+                fabric_handfeel: data.fabric_handfeel || 'OK',
+                fabric_pilling: data.fabric_pilling || 'None',
+
+                // Accessories
+                accessories_data: data.accessories_data || [],
+
                 remarks: data.remarks || '',
 
                 decision: '',
@@ -622,7 +667,7 @@ const Inspections = () => {
                                     </div>
                                 </div>
 
-                                
+
                                 {/* Measurements Grid (6 Samples) */}
                                 <div className="space-y-2">
                                     <Label>Measurements (Hold & Drag to Select Multiple • Delete/Backspace to Clear)</Label>
@@ -648,10 +693,10 @@ const Inspections = () => {
 
                                                     {/* Editable STD Field */}
                                                     <div className="col-span-1">
-                                                        <Input 
-                                                            {...register(`measurements.${index}.std`)} 
+                                                        <Input
+                                                            {...register(`measurements.${index}.std`)}
                                                             className={`h-8 text-xs text-center ${isSelected(index, 'std') ? 'bg-blue-200 ring-2 ring-blue-500' : 'bg-blue-50'}`}
-                                                            placeholder="-" 
+                                                            placeholder="-"
                                                             onPaste={handleMeasurementPaste(index, 'std')}
                                                             onKeyDown={(e) => handleCellKeyDown(e, index, 'std')}
                                                             onMouseDown={() => handleCellMouseDown(index, 'std')}
@@ -692,21 +737,219 @@ const Inspections = () => {
                                 </div>
 
 
-                                {/* Customer Remarks */}
-                                <div className="space-y-2">
-                                    <Label>Customer Feedback Summary</Label>
-                                    <Textarea {...register("customer_remarks")} className="h-20 bg-yellow-50" placeholder="Paste customer comments here..." />
+                                {/* ===== QUALITY EVALUATION SECTION ===== */}
+                                <div className="space-y-6 border p-6 rounded-lg bg-white shadow-sm">
+                                    <h3 className="text-lg font-bold text-gray-800 border-b pb-2">Quality Evaluation</h3>
+
+                                    {/* Legacy Customer Remarks (keep for old data) */}
+                                    <div className="space-y-2">
+                                        <Label className="text-sm text-gray-500">Customer Feedback Summary (General)</Label>
+                                        <Textarea {...register("customer_remarks")} className="h-16 bg-yellow-50 text-sm" placeholder="General customer feedback..." />
+                                    </div>
+
+                                    {/* FIT Section - Side by Side */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
+                                        <div className="bg-yellow-50 p-3 rounded-md border border-yellow-100">
+                                            <Label className="text-yellow-800 font-semibold text-sm mb-1 block">Customer Fit Comments</Label>
+                                            <Textarea {...register("customer_fit_comments")} className="bg-white border-yellow-200 h-14 text-sm" placeholder="Previous customer feedback..." />
+                                        </div>
+                                        <div className="bg-blue-50 p-3 rounded-md border border-blue-100">
+                                            <Label className="text-blue-800 font-semibold text-sm mb-1 block">QA Fit Findings</Label>
+                                            <Textarea {...register("qa_fit_comments")} className="bg-white border-blue-200 h-14 text-sm" placeholder="Enter QA findings..." />
+                                        </div>
+                                    </div>
+
+                                    {/* WORKMANSHIP Section */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="bg-yellow-50 p-3 rounded-md border border-yellow-100">
+                                            <Label className="text-yellow-800 font-semibold text-sm mb-1 block">Customer Workmanship Comments</Label>
+                                            <Textarea {...register("customer_workmanship_comments")} className="bg-white border-yellow-200 h-14 text-sm" />
+                                        </div>
+                                        <div className="bg-blue-50 p-3 rounded-md border border-blue-100">
+                                            <Label className="text-blue-800 font-semibold text-sm mb-1 block">QA Workmanship Findings</Label>
+                                            <Textarea {...register("qa_workmanship_comments")} className="bg-white border-blue-200 h-14 text-sm" />
+                                        </div>
+                                    </div>
+
+                                    {/* WASH Section */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="bg-yellow-50 p-3 rounded-md border border-yellow-100">
+                                            <Label className="text-yellow-800 font-semibold text-sm mb-1 block">Customer Wash Comments</Label>
+                                            <Textarea {...register("customer_wash_comments")} className="bg-white border-yellow-200 h-14 text-sm" />
+                                        </div>
+                                        <div className="bg-blue-50 p-3 rounded-md border border-blue-100">
+                                            <Label className="text-blue-800 font-semibold text-sm mb-1 block">QA Wash Findings</Label>
+                                            <Textarea {...register("qa_wash_comments")} className="bg-white border-blue-200 h-14 text-sm" />
+                                        </div>
+                                    </div>
+
+                                    {/* FABRIC Section */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="bg-yellow-50 p-3 rounded-md border border-yellow-100">
+                                            <Label className="text-yellow-800 font-semibold text-sm mb-1 block">Customer Fabric Comments</Label>
+                                            <Textarea {...register("customer_fabric_comments")} className="bg-white border-yellow-200 h-14 text-sm" />
+                                        </div>
+                                        <div className="bg-blue-50 p-3 rounded-md border border-blue-100">
+                                            <Label className="text-blue-800 font-semibold text-sm mb-1 block">QA Fabric Findings</Label>
+                                            <Textarea {...register("qa_fabric_comments")} className="bg-white border-blue-200 h-14 text-sm" />
+                                        </div>
+                                    </div>
+
+                                    {/* ACCESSORIES Section */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="bg-yellow-50 p-3 rounded-md border border-yellow-100">
+                                            <Label className="text-yellow-800 font-semibold text-sm mb-1 block">Customer Accessories Comments</Label>
+                                            <Textarea {...register("customer_accessories_comments")} className="bg-white border-yellow-200 h-14 text-sm" />
+                                        </div>
+                                        <div className="bg-blue-50 p-3 rounded-md border border-blue-100">
+                                            <Label className="text-blue-800 font-semibold text-sm mb-1 block">QA Accessories Findings</Label>
+                                            <Textarea {...register("qa_accessories_comments")} className="bg-white border-blue-200 h-14 text-sm" />
+                                        </div>
+                                    </div>
+
+                                    {/* Customer Comments Addressed Checkbox */}
+                                    <div className="flex items-center gap-3 p-3 bg-green-50 rounded-md border border-green-200">
+                                        <input
+                                            type="checkbox"
+                                            {...register("customer_comments_addressed")}
+                                            className="w-5 h-5 accent-green-600"
+                                        />
+                                        <Label className="text-green-800 font-medium cursor-pointer">
+                                            ✓ All previous customer comments have been addressed
+                                        </Label>
+                                    </div>
                                 </div>
 
-                                {/* QA Evaluation Section */}
-                                <div className="space-y-4 border p-4 rounded-lg bg-gray-50">
-                                    <Label className="text-lg font-bold">QA Comments</Label>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="space-y-1"><Label>Fit Comments</Label><Textarea {...register("qa_fit_comments")} className="h-16 bg-white" /></div>
-                                        <div className="space-y-1"><Label>Workmanship</Label><Textarea {...register("qa_workmanship_comments")} className="h-16 bg-white" /></div>
-                                        <div className="space-y-1"><Label>Wash</Label><Textarea {...register("qa_wash_comments")} className="h-16 bg-white" /></div>
-                                        <div className="space-y-1"><Label>Fabric</Label><Textarea {...register("qa_fabric_comments")} className="h-16 bg-white" /></div>
-                                        <div className="space-y-1"><Label>Accessories</Label><Textarea {...register("qa_accessories_comments")} className="h-16 bg-white" /></div>
+                                {/* ===== ACCESSORIES & FABRIC SECTION ===== */}
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                                    {/* Dynamic Accessories Checklist (2 columns) */}
+                                    <div className="lg:col-span-2 border p-4 rounded-lg bg-gray-50">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <Label className="text-base font-bold">Accessories Checklist</Label>
+                                            <div className="flex gap-2">
+                                                <Select onValueChange={(val) => appendAcc({ name: val, status: 'OK', comment: '' })}>
+                                                    <SelectTrigger className="w-[140px] h-8 text-xs bg-white">
+                                                        <SelectValue placeholder="+ Add Preset" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {ACCESSORY_PRESETS.map(preset => (
+                                                            <SelectItem key={preset} value={preset}>{preset}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => appendAcc({ name: '', status: 'OK', comment: '' })}
+                                                    className="bg-white hover:bg-gray-100 h-8"
+                                                >
+                                                    <Plus className="w-3 h-3 mr-1" /> Custom
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                                            {accFields.map((field, index) => (
+                                                <div key={field.id} className="flex gap-2 items-start bg-white p-2 rounded border">
+                                                    <Input
+                                                        {...register(`accessories_data.${index}.name`)}
+                                                        placeholder="Item name"
+                                                        className="w-1/4 h-8 text-sm"
+                                                    />
+                                                    <Select
+                                                        value={watch(`accessories_data.${index}.status`)}
+                                                        onValueChange={(val) => setValue(`accessories_data.${index}.status`, val as any)}
+                                                    >
+                                                        <SelectTrigger className={`w-24 h-8 text-xs font-medium ${watch(`accessories_data.${index}.status`) === 'Not OK' ? 'text-red-600 bg-red-50' :
+                                                                watch(`accessories_data.${index}.status`) === 'N/A' ? 'text-gray-400' : 'text-green-600 bg-green-50'
+                                                            }`}>
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="OK">OK</SelectItem>
+                                                            <SelectItem value="Not OK">Not OK</SelectItem>
+                                                            <SelectItem value="N/A">N/A</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <Input
+                                                        {...register(`accessories_data.${index}.comment`)}
+                                                        placeholder="Remarks..."
+                                                        className="flex-1 h-8 text-sm"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => removeAcc(index)}
+                                                        className="text-red-500 hover:bg-red-50 h-8 w-8"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </Button>
+                                                </div>
+                                            ))}
+
+                                            {accFields.length === 0 && (
+                                                <div className="text-center py-6 text-gray-400 border-2 border-dashed rounded-md text-sm">
+                                                    No accessories added. Use presets or click "Custom" to add items.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Fabric Check Panel (1 column) */}
+                                    <div className="border p-4 rounded-lg bg-white h-fit">
+                                        <Label className="text-base font-bold mb-4 block">Fabric Check</Label>
+
+                                        <div className="space-y-5">
+                                            {/* Handfeel Radio */}
+                                            <div className="space-y-2">
+                                                <Label className="text-sm text-gray-600">Handfeel</Label>
+                                                <div className="flex gap-3">
+                                                    <label className={`flex items-center gap-2 cursor-pointer border p-2 rounded-md flex-1 transition-all ${watch('fabric_handfeel') === 'OK' ? 'bg-green-50 border-green-300' : 'hover:bg-gray-50'
+                                                        }`}>
+                                                        <input
+                                                            type="radio"
+                                                            value="OK"
+                                                            {...register('fabric_handfeel')}
+                                                            className="accent-green-600 w-4 h-4"
+                                                        />
+                                                        <span className="text-sm font-medium">OK</span>
+                                                    </label>
+                                                    <label className={`flex items-center gap-2 cursor-pointer border p-2 rounded-md flex-1 transition-all ${watch('fabric_handfeel') === 'Not OK' ? 'bg-red-50 border-red-300' : 'hover:bg-gray-50'
+                                                        }`}>
+                                                        <input
+                                                            type="radio"
+                                                            value="Not OK"
+                                                            {...register('fabric_handfeel')}
+                                                            className="accent-red-600 w-4 h-4"
+                                                        />
+                                                        <span className="text-sm font-medium">Not OK</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            {/* Pilling Select */}
+                                            <div className="space-y-2">
+                                                <Label className="text-sm text-gray-600">Pilling</Label>
+                                                <Select
+                                                    value={watch('fabric_pilling')}
+                                                    onValueChange={(val) => setValue('fabric_pilling', val)}
+                                                >
+                                                    <SelectTrigger className={`w-full ${watch('fabric_pilling') === 'High' ? 'text-red-600 bg-red-50' :
+                                                            watch('fabric_pilling') === 'Low' ? 'text-orange-600 bg-orange-50' : 'text-green-600 bg-green-50'
+                                                        }`}>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="None">None (Good)</SelectItem>
+                                                        <SelectItem value="Low">Low (Acceptable)</SelectItem>
+                                                        <SelectItem value="High">High (Reject)</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
