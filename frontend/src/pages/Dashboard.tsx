@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import {
@@ -8,14 +9,69 @@ import api from '../lib/api';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
+// Helper to format date as YYYY-MM-DD (using local timezone)
+const formatDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+// Get start of week (Monday)
+const getStartOfWeek = (date: Date) => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    d.setDate(diff);
+    return d;
+};
+
+// Get start of month
+const getStartOfMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+};
+
 const Dashboard = () => {
+    const [startDate, setStartDate] = useState<string>('');
+    const [endDate, setEndDate] = useState<string>('');
+
     const { data, isLoading } = useQuery({
-        queryKey: ['dashboard'],
+        queryKey: ['dashboard', startDate, endDate],
         queryFn: async () => {
-            const res = await api.get('/dashboard/');
+            const params = new URLSearchParams();
+            if (startDate) params.append('start_date', startDate);
+            if (endDate) params.append('end_date', endDate);
+            const url = `/dashboard/${params.toString() ? '?' + params.toString() : ''}`;
+            const res = await api.get(url);
             return res.data;
         },
     });
+
+    // Quick filter handlers
+    const handleThisWeek = () => {
+        const now = new Date();
+        setStartDate(formatDate(getStartOfWeek(now)));
+        setEndDate(formatDate(now));
+    };
+
+    const handleThisMonth = () => {
+        const now = new Date();
+        setStartDate(formatDate(getStartOfMonth(now)));
+        setEndDate(formatDate(now));
+    };
+
+    const handleLast30Days = () => {
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now);
+        thirtyDaysAgo.setDate(now.getDate() - 30);
+        setStartDate(formatDate(thirtyDaysAgo));
+        setEndDate(formatDate(now));
+    };
+
+    const handleAllTime = () => {
+        setStartDate('');
+        setEndDate('');
+    };
 
     if (isLoading) return <div>Loading...</div>;
 
@@ -110,6 +166,63 @@ const Dashboard = () => {
     return (
         <div className="space-y-4 md:space-y-6 pb-10">
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Dashboard</h1>
+
+            {/* Date Range Filter */}
+            <Card>
+                <CardContent className="pt-4">
+                    <div className="flex flex-wrap items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm font-medium text-gray-600">From:</label>
+                            <input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm font-medium text-gray-600">To:</label>
+                            <input
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className="border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div className="flex items-center gap-2 ml-auto">
+                            <button
+                                onClick={handleThisWeek}
+                                className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                            >
+                                This Week
+                            </button>
+                            <button
+                                onClick={handleThisMonth}
+                                className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                            >
+                                This Month
+                            </button>
+                            <button
+                                onClick={handleLast30Days}
+                                className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                            >
+                                Last 30 Days
+                            </button>
+                            <button
+                                onClick={handleAllTime}
+                                className="px-3 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-md transition-colors"
+                            >
+                                All Time
+                            </button>
+                        </div>
+                    </div>
+                    {(startDate || endDate) && (
+                        <div className="mt-2 text-sm text-gray-500">
+                            Showing data {startDate ? `from ${startDate}` : ''} {endDate ? `to ${endDate}` : ''}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
             {/* KPI Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">

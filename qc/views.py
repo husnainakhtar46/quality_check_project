@@ -187,52 +187,75 @@ from django.db.models.functions import TruncMonth
 
 class DashboardView(APIView):
     def get(self, request):
+        # Parse optional date range filters
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        
         # ==================== EVALUATION ANALYTICS ====================
-        total_inspections = Inspection.objects.count()
-        pass_count = Inspection.objects.filter(decision="Accepted").count()
-        fail_count = Inspection.objects.exclude(decision="Accepted").count()
+        # Base queryset with date filtering
+        eval_qs = Inspection.objects.all()
+        if start_date:
+            eval_qs = eval_qs.filter(created_at__date__gte=start_date)
+        if end_date:
+            eval_qs = eval_qs.filter(created_at__date__lte=end_date)
+        
+        total_inspections = eval_qs.count()
+        pass_count = eval_qs.filter(decision="Accepted").count()
+        fail_count = eval_qs.exclude(decision="Accepted").count()
         pass_rate = (pass_count / total_inspections * 100) if total_inspections > 0 else 0
         
-        recent_inspections = Inspection.objects.select_related('customer', 'template') \
+        recent_inspections = eval_qs.select_related('customer', 'template') \
                                                .order_by("-created_at")[:5]
         recent_serializer = InspectionListSerializer(recent_inspections, many=True)
 
         # 1. Inspections by Stage
-        inspections_by_stage = Inspection.objects.values('stage').annotate(count=Count('id')).order_by('-count')
+        inspections_by_stage = eval_qs.values('stage').annotate(count=Count('id')).order_by('-count')
 
         # 2. Inspections by Customer
-        inspections_by_customer = Inspection.objects.values('customer__name').annotate(count=Count('id')).order_by('-count')
+        inspections_by_customer = eval_qs.values('customer__name').annotate(count=Count('id')).order_by('-count')
 
         # 3. Monthly Inspection Trend
-        monthly_trend = Inspection.objects.annotate(month=TruncMonth('created_at')).values('month').annotate(count=Count('id')).order_by('month')
+        monthly_trend = eval_qs.annotate(month=TruncMonth('created_at')).values('month').annotate(count=Count('id')).order_by('month')
 
         # 4. Customer vs Internal Decision
-        internal_decisions = Inspection.objects.values('decision').annotate(count=Count('id'))
-        customer_decisions = Inspection.objects.values('customer_decision').annotate(count=Count('id'))
+        internal_decisions = eval_qs.values('decision').annotate(count=Count('id'))
+        customer_decisions = eval_qs.values('customer_decision').annotate(count=Count('id'))
 
         # ==================== FINAL INSPECTION ANALYTICS ====================
-        fi_total = FinalInspection.objects.count()
-        fi_pass = FinalInspection.objects.filter(result='Pass').count()
-        fi_fail = FinalInspection.objects.filter(result='Fail').count()
+        # Base queryset with date filtering
+        fi_qs = FinalInspection.objects.all()
+        if start_date:
+            fi_qs = fi_qs.filter(inspection_date__gte=start_date)
+        if end_date:
+            fi_qs = fi_qs.filter(inspection_date__lte=end_date)
+        
+        fi_total = fi_qs.count()
+        fi_pass = fi_qs.filter(result='Pass').count()
+        fi_fail = fi_qs.filter(result='Fail').count()
         fi_pass_rate = (fi_pass / fi_total * 100) if fi_total > 0 else 0
 
         # 1. Pass/Fail Monthly Trend
-        fi_monthly_pass = FinalInspection.objects.filter(result='Pass').annotate(
+        fi_monthly_pass = fi_qs.filter(result='Pass').annotate(
             month=TruncMonth('inspection_date')
         ).values('month').annotate(count=Count('id')).order_by('month')
         
-        fi_monthly_fail = FinalInspection.objects.filter(result='Fail').annotate(
+        fi_monthly_fail = fi_qs.filter(result='Fail').annotate(
             month=TruncMonth('inspection_date')
         ).values('month').annotate(count=Count('id')).order_by('month')
 
         # 2. By Customer (Pass/Fail counts)
-        fi_by_customer = FinalInspection.objects.values('customer__name').annotate(
+        fi_by_customer = fi_qs.values('customer__name').annotate(
             pass_count=Count('id', filter=Q(result='Pass')),
             fail_count=Count('id', filter=Q(result='Fail'))
         ).order_by('-pass_count')[:10]
 
-        # 3. Top Defect Types
-        fi_top_defects = FinalInspectionDefect.objects.values('description').annotate(
+        # 3. Top Defect Types (filter by inspection date via related FinalInspection)
+        defect_qs = FinalInspectionDefect.objects.all()
+        if start_date:
+            defect_qs = defect_qs.filter(final_inspection__inspection_date__gte=start_date)
+        if end_date:
+            defect_qs = defect_qs.filter(final_inspection__inspection_date__lte=end_date)
+        fi_top_defects = defect_qs.values('description').annotate(
             total=Count('id')
         ).order_by('-total')[:10]
 
