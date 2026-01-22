@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, FileText, ClipboardCheck, Users, X, MessageSquare, LogOut, ClipboardList } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useEffect } from 'react';
+import { useAuth } from '../lib/useAuth';
 
 interface MobileSidebarProps {
     isOpen: boolean;
@@ -10,23 +11,24 @@ interface MobileSidebarProps {
 
 const MobileSidebar = ({ isOpen, onClose }: MobileSidebarProps) => {
     const location = useLocation();
-    const isSuperUser = localStorage.getItem('is_superuser') === 'true';
+    const { canViewDashboard, canViewCustomers, canViewTemplates } = useAuth();
 
     const allLinks = [
-        { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, adminOnly: true },
-        { href: '/inspections', label: 'Evaluation', icon: ClipboardCheck, adminOnly: false },
-        { href: '/final-inspections', label: 'Final Inspection', icon: ClipboardList, adminOnly: false },
-        { href: '/customer-feedback', label: 'Customer Feedback', icon: MessageSquare, adminOnly: false },
-        { href: '/templates', label: 'Templates', icon: FileText, adminOnly: false },
-        { href: '/customers', label: 'Customers', icon: Users, adminOnly: true },
+        { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, visible: canViewDashboard },
+        { href: '/inspections', label: 'Evaluation', icon: ClipboardCheck, visible: true },
+        { href: '/final-inspections', label: 'Final Inspection', icon: ClipboardList, visible: true },
+        { href: '/customer-feedback', label: 'Customer Feedback', icon: MessageSquare, visible: true },
+        { href: '/templates', label: 'Templates', icon: FileText, visible: canViewTemplates },
+        { href: '/customers', label: 'Customers', icon: Users, visible: canViewCustomers },
     ];
 
-    const links = allLinks.filter(link => isSuperUser || !link.adminOnly);
+    const links = allLinks.filter(link => link.visible);
 
     const handleLogout = () => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('is_superuser');
+        localStorage.removeItem('user_type');
         window.location.href = '/login';
     };
 

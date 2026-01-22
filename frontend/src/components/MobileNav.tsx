@@ -1,16 +1,21 @@
 import { Link, useLocation } from 'react-router-dom';
-import { FileText, ClipboardCheck, MessageSquare } from 'lucide-react';
+import { FileText, ClipboardCheck, MessageSquare, ClipboardList } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useAuth } from '../lib/useAuth';
 
 const MobileNav = () => {
     const location = useLocation();
+    const { canViewTemplates } = useAuth();
 
-    // Only show core pages in bottom navigation
-    const links = [
-        { href: '/inspections', label: 'Evaluation', icon: ClipboardCheck },
-        { href: '/customer-feedback', label: 'Feedback', icon: MessageSquare },
-        { href: '/templates', label: 'Templates', icon: FileText },
+    // Core pages for bottom navigation with role filtering
+    const allLinks = [
+        { href: '/inspections', label: 'Evaluation', icon: ClipboardCheck, visible: true },
+        { href: '/final-inspections', label: 'Inspection', icon: ClipboardList, visible: true },
+        { href: '/customer-feedback', label: 'Feedback', icon: MessageSquare, visible: true },
+        { href: '/templates', label: 'Templates', icon: FileText, visible: canViewTemplates },
     ];
+
+    const links = allLinks.filter(link => link.visible);
 
     return (
         <nav className="fixed bottom-0 left-0 right-0 z-[100] bg-white border-t border-gray-200 md:hidden safe-bottom">

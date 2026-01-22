@@ -2,8 +2,44 @@
 import uuid
 from django.db import models
 from django.contrib.auth import get_user_model
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 User = get_user_model()
+
+
+class UserProfile(models.Model):
+    """User profile for role-based access control."""
+    USER_TYPE_CHOICES = [
+        ('qa', 'QA'),
+        ('quality_head', 'Quality Head'),
+        ('quality_supervisor', 'Quality Supervisor'),
+        ('merchandiser', 'Merchandiser'),
+    ]
+    
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    user_type = models.CharField(max_length=20, choices=USER_TYPE_CHOICES, default='qa')
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.get_user_type_display()}"
+
+
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    """Auto-create UserProfile when User is created (if not already exists)."""
+    if created:
+        UserProfile.objects.get_or_create(user=instance)
+
+
+@receiver(post_save, sender=User)
+def save_user_profile(sender, instance, **kwargs):
+    """Auto-save profile when User is saved."""
+    # Only save if profile exists (might not exist during admin inline creation)
+    try:
+        if hasattr(instance, 'profile') and instance.profile:
+            instance.profile.save()
+    except UserProfile.DoesNotExist:
+        pass
 
 class Customer(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

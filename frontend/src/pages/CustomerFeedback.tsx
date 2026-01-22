@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { MessageSquare, CheckCircle, XCircle, AlertCircle, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
+import { useAuth } from '../lib/useAuth';
 import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
@@ -52,6 +53,7 @@ type FeedbackForm = {
 
 const CustomerFeedback = () => {
     const queryClient = useQueryClient();
+    const { canAddCustomerFeedback } = useAuth();
     const [selectedInspection, setSelectedInspection] = useState<Inspection | null>(null);
     const [isOpen, setIsOpen] = useState(false);
 
@@ -93,7 +95,8 @@ const CustomerFeedback = () => {
     const updateMutation = useMutation({
         mutationFn: async (data: FeedbackForm) => {
             if (!selectedInspection) return;
-            const res = await api.patch(`/inspections/${selectedInspection.id}/`, data);
+            // Use dedicated feedback endpoint that allows merchandisers
+            const res = await api.patch(`/inspections/${selectedInspection.id}/update_customer_feedback/`, data);
             return res.data;
         },
         onSuccess: () => {
@@ -203,14 +206,18 @@ const CustomerFeedback = () => {
                                     {inspection.customer_feedback_date ? new Date(inspection.customer_feedback_date).toLocaleDateString('en-GB') : '-'}
                                 </TableCell>
                                 <TableCell>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleEdit(inspection)}
-                                    >
-                                        <MessageSquare className="w-4 h-4 mr-2" />
-                                        Feedback
-                                    </Button>
+                                    {canAddCustomerFeedback ? (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleEdit(inspection)}
+                                        >
+                                            <MessageSquare className="w-4 h-4 mr-2" />
+                                            Feedback
+                                        </Button>
+                                    ) : (
+                                        <span className="text-gray-400 text-sm">View Only</span>
+                                    )}
                                 </TableCell>
                             </TableRow>
                         ))}

@@ -2,6 +2,7 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.mail import EmailMessage
@@ -18,6 +19,7 @@ from .serializers import (
 from django.db.models import Prefetch
 from .filters import InspectionFilter
 from .services.pdf_generator import generate_pdf_buffer, generate_final_inspection_pdf
+from .permissions import CanEditEvaluation, CanEditFinalInspection, CanCreateInspection, CanAddCustomerFeedback, IsQualityHeadOrAdmin
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -25,8 +27,10 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
 
 class InspectionViewSet(viewsets.ModelViewSet):
+    """ViewSet for Evaluation/Inspection reports with role-based permissions."""
     queryset = Inspection.objects.all()
     serializer_class = InspectionSerializer
+    permission_classes = [CanEditEvaluation]
     
     # Use django-filter for advanced filtering + ordering
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
@@ -144,9 +148,43 @@ class InspectionViewSet(viewsets.ModelViewSet):
         email.send(fail_silently=False)
         return Response({"sent": True, "to": to_emails, "cc": cc_emails})
 
+    @action(detail=True, methods=["patch"], permission_classes=[CanAddCustomerFeedback])
+    def update_customer_feedback(self, request, pk=None):
+        """
+        Update customer feedback fields only.
+        Only merchandisers and admin can use this.
+        """
+        from django.utils import timezone
+        inspection = self.get_object()
+        
+        # Only allow updating feedback-specific fields
+        allowed_fields = ['customer_decision', 'customer_feedback_comments']
+        data = {k: v for k, v in request.data.items() if k in allowed_fields}
+        
+        if not data:
+            return Response({"error": "No valid feedback fields provided"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update the fields
+        for field, value in data.items():
+            setattr(inspection, field, value)
+        
+        # Auto-set feedback date
+        inspection.customer_feedback_date = timezone.now().date()
+        inspection.save()
+        
+        return Response({
+            "id": str(inspection.id),
+            "customer_decision": inspection.customer_decision,
+            "customer_feedback_comments": inspection.customer_feedback_comments,
+            "customer_feedback_date": str(inspection.customer_feedback_date),
+        })
+
 class CustomerViewSet(viewsets.ModelViewSet):
+    """ViewSet for Customer management - Quality Head/Admin only."""
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
+    permission_classes = [IsQualityHeadOrAdmin]
+    
     @action(detail=True, methods=["post"])
     def add_email(self, request, pk=None):
         customer = self.get_object()
@@ -291,9 +329,11 @@ from .serializers import FinalInspectionSerializer, FinalInspectionListSerialize
 class FinalInspectionViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Final Inspection Reports with AQL-based shipment audits.
+    Role-based permissions: QA can edit own, Quality Head/Supervisor can edit all.
     """
     queryset = FinalInspection.objects.all()
     serializer_class = FinalInspectionSerializer
+    permission_classes = [CanEditFinalInspection]
     
     # Filtering and ordering
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]

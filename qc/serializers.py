@@ -13,6 +13,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         data = super().validate(attrs)
         data['username'] = self.user.username
         data['is_superuser'] = self.user.is_superuser
+        # Include user_type from profile (default to 'qa' if no profile)
+        try:
+            data['user_type'] = self.user.profile.user_type
+        except:
+            data['user_type'] = 'qa'
         return data
 
 class CustomerEmailSerializer(serializers.ModelSerializer):

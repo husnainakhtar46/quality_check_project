@@ -4,6 +4,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { FileText, Mail, Trash2, Search, Copy, Loader2, ChevronLeft, ChevronRight, Plus, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
+import { useAuth } from '../lib/useAuth';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -63,13 +64,14 @@ const ACCESSORY_PRESETS = [
 
 const Inspections = () => {
     const queryClient = useQueryClient();
+    const { canCreateInspections, isReadOnly, canEditEvaluation } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
 
     const [isManualTemplateChange, setIsManualTemplateChange] = useState(false);
     const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
 
     const [page, setPage] = useState(1);
-    const [listSearch, setListSearch] = useState('');
+    const [listSearch] = useState('');
     const [, setDebouncedListSearch] = useState('');
 
     // Filter state for advanced filtering
@@ -579,9 +581,11 @@ const Inspections = () => {
                 <h1 className="text-3xl font-bold text-gray-900">Evaluation</h1>
 
                 <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                    <DialogTrigger asChild>
-                        <Button><Plus className="w-4 h-4 mr-2" />New Evaluation</Button>
-                    </DialogTrigger>
+                    {canCreateInspections && (
+                        <DialogTrigger asChild>
+                            <Button><Plus className="w-4 h-4 mr-2" />New Evaluation</Button>
+                        </DialogTrigger>
+                    )}
                     <DialogContent className="!left-0 !top-0 !right-0 !bottom-0 !translate-x-0 !translate-y-0 max-w-none !rounded-none overflow-y-auto p-0 m-0">
                         <DialogHeader><DialogTitle>Evaluation</DialogTitle></DialogHeader>
 
@@ -863,7 +867,7 @@ const Inspections = () => {
                                                         onValueChange={(val) => setValue(`accessories_data.${index}.status`, val as any)}
                                                     >
                                                         <SelectTrigger className={`w-24 h-8 text-xs font-medium ${watch(`accessories_data.${index}.status`) === 'Not OK' ? 'text-red-600 bg-red-50' :
-                                                                watch(`accessories_data.${index}.status`) === 'N/A' ? 'text-gray-400' : 'text-green-600 bg-green-50'
+                                                            watch(`accessories_data.${index}.status`) === 'N/A' ? 'text-gray-400' : 'text-green-600 bg-green-50'
                                                             }`}>
                                                             <SelectValue />
                                                         </SelectTrigger>
@@ -938,7 +942,7 @@ const Inspections = () => {
                                                     onValueChange={(val) => setValue('fabric_pilling', val)}
                                                 >
                                                     <SelectTrigger className={`w-full ${watch('fabric_pilling') === 'High' ? 'text-red-600 bg-red-50' :
-                                                            watch('fabric_pilling') === 'Low' ? 'text-orange-600 bg-orange-50' : 'text-green-600 bg-green-50'
+                                                        watch('fabric_pilling') === 'Low' ? 'text-orange-600 bg-orange-50' : 'text-green-600 bg-green-50'
                                                         }`}>
                                                         <SelectValue />
                                                     </SelectTrigger>
@@ -1053,14 +1057,20 @@ const Inspections = () => {
                                     <Button variant="outline" size="sm" onClick={() => handleDownloadPdf(inspection.id, inspection.style)}>
                                         <FileText className="w-4 h-4" />
                                     </Button>
-                                    <Button variant="outline" size="sm" onClick={() => {
-                                        if (confirm(`Send report to customer for ${inspection.style}?`)) emailMutation.mutate(inspection.id)
-                                    }}>
-                                        <Mail className="w-4 h-4" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="text-red-500" onClick={() => { if (confirm('Delete?')) deleteMutation.mutate(inspection.id) }}>
-                                        <Trash2 className="w-4 h-4" />
-                                    </Button>
+                                    {!isReadOnly && (
+                                        <>
+                                            <Button variant="outline" size="sm" onClick={() => {
+                                                if (confirm(`Send report to customer for ${inspection.style}?`)) emailMutation.mutate(inspection.id)
+                                            }}>
+                                                <Mail className="w-4 h-4" />
+                                            </Button>
+                                            {canEditEvaluation && (
+                                                <Button variant="ghost" size="icon" className="text-red-500" onClick={() => { if (confirm('Delete?')) deleteMutation.mutate(inspection.id) }}>
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            )}
+                                        </>
+                                    )}
                                 </TableCell>
                             </TableRow>
                         ))}

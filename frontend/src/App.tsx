@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, ReactNode } from 'react';
 import { Toaster } from './components/ui/toaster';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -13,8 +13,23 @@ import Sidebar from './components/Sidebar';
 import MobileNav from './components/MobileNav';
 import MobileHeader from './components/MobileHeader';
 import MobileSidebar from './components/MobileSidebar';
+import { useAuth } from './lib/useAuth';
 
 const queryClient = new QueryClient();
+
+// Protected route wrapper for role-based access
+const ProtectedRoute = ({
+    children,
+    requiredPermission
+}: {
+    children: ReactNode;
+    requiredPermission: boolean;
+}) => {
+    if (!requiredPermission) {
+        return <Navigate to="/inspections" replace />;
+    }
+    return <>{children}</>;
+};
 
 const Layout = () => {
     const token = localStorage.getItem('access_token');
@@ -46,8 +61,36 @@ const Layout = () => {
 };
 
 const HomeRedirect = () => {
-    const isSuperUser = localStorage.getItem('is_superuser') === 'true';
-    return <Navigate to={isSuperUser ? "/dashboard" : "/inspections"} />;
+    const { canViewDashboard } = useAuth();
+    return <Navigate to={canViewDashboard ? "/dashboard" : "/inspections"} />;
+};
+
+// Wrapper components for protected routes
+const ProtectedDashboard = () => {
+    const { canViewDashboard } = useAuth();
+    return (
+        <ProtectedRoute requiredPermission={canViewDashboard}>
+            <Dashboard />
+        </ProtectedRoute>
+    );
+};
+
+const ProtectedTemplates = () => {
+    const { canViewTemplates } = useAuth();
+    return (
+        <ProtectedRoute requiredPermission={canViewTemplates}>
+            <Templates />
+        </ProtectedRoute>
+    );
+};
+
+const ProtectedCustomers = () => {
+    const { canViewCustomers } = useAuth();
+    return (
+        <ProtectedRoute requiredPermission={canViewCustomers}>
+            <Customers />
+        </ProtectedRoute>
+    );
 };
 
 function App() {
@@ -58,12 +101,12 @@ function App() {
                     <Route path="/login" element={<Login />} />
                     <Route element={<Layout />}>
                         <Route path="/" element={<HomeRedirect />} />
-                        <Route path="/dashboard" element={<Dashboard />} />
-                        <Route path="/templates" element={<Templates />} />
+                        <Route path="/dashboard" element={<ProtectedDashboard />} />
+                        <Route path="/templates" element={<ProtectedTemplates />} />
                         <Route path="/inspections" element={<Inspections />} />
                         <Route path="/final-inspections" element={<FinalInspections />} />
                         <Route path="/customer-feedback" element={<CustomerFeedback />} />
-                        <Route path="/customers" element={<Customers />} />
+                        <Route path="/customers" element={<ProtectedCustomers />} />
                     </Route>
                 </Routes>
             </Router>

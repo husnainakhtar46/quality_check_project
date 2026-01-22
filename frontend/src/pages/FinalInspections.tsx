@@ -10,6 +10,7 @@ import { Download, Plus, Search, Pencil, Trash2, FileText } from 'lucide-react';
 import { useToast } from '../components/ui/use-toast';
 import FinalInspectionForm from '../components/FinalInspectionForm';
 import Pagination from '../components/Pagination';
+import { useAuth } from '../lib/useAuth';
 
 
 interface FinalInspection {
@@ -43,6 +44,7 @@ export default function FinalInspections() {
   const [page, setPage] = useState(1);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { canCreateInspections, canEditFinalInspection, isReadOnly } = useAuth();
 
 
   // Fetch final inspections with pagination
@@ -132,9 +134,11 @@ export default function FinalInspections() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Final Inspection Reports</h1>
-        <Button onClick={() => setIsFormOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Create New FIR
-        </Button>
+        {canCreateInspections && (
+          <Button onClick={() => setIsFormOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Create New FIR
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -195,27 +199,31 @@ export default function FinalInspections() {
                     >
                       <Download className="h-4 w-4" />
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedInspection(inspection.id);
-                        setIsFormOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (confirm('Delete this Final Inspection?')) {
-                          deleteMutation.mutate(inspection.id);
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
+                    {canEditFinalInspection(inspection.created_by_username) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedInspection(inspection.id);
+                          setIsFormOpen(true);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {!isReadOnly && canEditFinalInspection(inspection.created_by_username) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (confirm('Delete this Final Inspection?')) {
+                            deleteMutation.mutate(inspection.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>

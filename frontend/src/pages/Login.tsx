@@ -21,9 +21,11 @@ const Login = () => {
         onSuccess: (data) => {
             localStorage.setItem('access_token', data.access);
             localStorage.setItem('refresh_token', data.refresh);
-            localStorage.setItem('is_superuser', String(data.is_superuser)); // Store role
+            localStorage.setItem('is_superuser', String(data.is_superuser));
+            localStorage.setItem('user_type', data.user_type || 'qa');
             toast.success('Login successful');
-            if (data.is_superuser) {
+            // Redirect based on role
+            if (data.is_superuser || ['quality_head', 'quality_supervisor'].includes(data.user_type)) {
                 navigate('/dashboard');
             } else {
                 navigate('/inspections');
